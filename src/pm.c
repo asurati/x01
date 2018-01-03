@@ -26,8 +26,9 @@ static uintptr_t ram_end_pa;
 
 void pm_init(uint32_t ram, uint32_t ramsz)
 {
-	int mapsz, npfns;
+	int i, mapsz, npfns;
 	size_t _128mb;
+	uintptr_t pa[4];
 	extern char ram_static_use_end_pa;
 	extern char bdy_map_start;
 
@@ -48,6 +49,11 @@ void pm_init(uint32_t ram, uint32_t ramsz)
 	mapsz >>= PAGE_SIZE_SZ;
 	assert(mapsz > 0 && mapsz < 5);
 	bdy_init(&bdy_ram, (void *)&bdy_map_start, npfns);
+
+	/* Reserve the first 8MB of RAM. */
+	pm_ram_alloc(PM_UNIT_2MB, 4, pa);
+	for (i = 0; i < 4; ++i)
+		assert(pa[i] == (size_t)i * 2 * 1024 * 1024);
 }
 
 int pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa)

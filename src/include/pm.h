@@ -23,6 +23,7 @@
 /* PM_UNIT_MAX must equal BDY_NLEVELS. */
 enum pm_alloc_units {
 	PM_UNIT_4KB,
+	PM_UNIT_PAGE = PM_UNIT_4KB,
 	PM_UNIT_8KB,
 	PM_UNIT_16KB,
 	PM_UNIT_32KB,
