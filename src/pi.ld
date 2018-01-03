@@ -83,8 +83,6 @@ SECTIONS
 		ptab_end = .;
 	}
 
-	ram_static_use_end_pa = . - KMODE_VA;
-
 	/* The below allocations are purely VA allocations. */
 
 	. = ASSERT(. < (KMODE_VA + 0x800000), "kernel too big.");

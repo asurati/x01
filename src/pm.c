@@ -22,21 +22,16 @@
 
 struct bdy bdy_ram;
 
-static uintptr_t ram_end_pa;
-
 void pm_init(uint32_t ram, uint32_t ramsz)
 {
 	int i, mapsz, npfns;
 	size_t _128mb;
 	uintptr_t pa[4];
-	extern char ram_static_use_end_pa;
 	extern char bdy_map_start;
 
 	/* For RPi, the RAM start is expected to be at physical zero. */
 	assert(ram == 0);
 	assert(ramsz);
-
-	ram_end_pa = (uintptr_t)&ram_static_use_end_pa;
 
 	/* Restrict RAM usage to 128MB. */
 	_128mb = 128 * 1024 * 1024;
