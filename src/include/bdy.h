@@ -20,7 +20,7 @@
 
 #include <types.h>
 
-#define BDY_NLEVELS		10
+#define BDY_NLEVELS		13
 
 struct bdy {
 	int nbits[BDY_NLEVELS];

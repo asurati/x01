@@ -23,7 +23,6 @@
 /* PM_UNIT_MAX must equal BDY_NLEVELS. */
 enum pm_alloc_units {
 	PM_UNIT_4KB,
-	PM_UNIT_PAGE = PM_UNIT_4KB,
 	PM_UNIT_8KB,
 	PM_UNIT_16KB,
 	PM_UNIT_32KB,
@@ -33,8 +32,16 @@ enum pm_alloc_units {
 	PM_UNIT_512KB,
 	PM_UNIT_1MB,
 	PM_UNIT_2MB,
+	PM_UNIT_4MB,
+	PM_UNIT_8MB,
+	PM_UNIT_16MB,
 	PM_UNIT_MAX
 };
+
+#define PM_UNIT_PAGE		PM_UNIT_4KB
+#define PM_UNIT_LARGE_PAGE	PM_UNIT_64KB
+#define PM_UNIT_SECTION		PM_UNIT_1MB
+#define PM_UNIT_SUPER_SECTION	PM_UNIT_16MB
 
 void	pm_init(uint32_t ram, uint32_t ramsz);
 int	pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa);
