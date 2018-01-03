@@ -49,3 +49,49 @@ void pm_init(uint32_t ram, uint32_t ramsz)
 	assert(mapsz > 0 && mapsz < 5);
 	bdy_init(&bdy_ram, (void *)&bdy_map_start, npfns);
 }
+
+int pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa)
+{
+	int i, ret, pos;
+	assert(unit < PM_UNIT_MAX);
+
+	for (i = 0; i < n; ++i) {
+		ret = bdy_alloc(&bdy_ram, unit, &pos);
+		if (ret)
+			break;
+		pa[i] = pos;
+	}
+
+	if (ret == 0) {
+		for (i = 0; i < n; ++i) {
+			pa[i] <<= unit;
+			pa[i] <<= PAGE_SIZE_SZ;
+		}
+		return ret;
+	}
+
+	for (i = i - 1; i >= 0; --i)
+		bdy_free(&bdy_ram, unit, pa[i]);
+	return ret;
+}
+
+int pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa)
+{
+	int i, ret;
+	uintptr_t p, mask;
+	assert(unit < PM_UNIT_MAX);
+
+	/* The input addresses must be aligned according to the unit passed. */
+	mask = (1 << unit) - 1;
+	for (i = 0; i < n; ++i) {
+		ret = -1;
+		p = pa[i] >> PAGE_SIZE_SZ;
+		if (p & mask)
+			break;
+		p >>= unit;
+		ret = bdy_free(&bdy_ram, unit, p);
+		if (ret)
+			break;
+	}
+	return ret;
+}

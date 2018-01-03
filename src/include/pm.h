@@ -35,6 +35,8 @@ enum pm_alloc_units {
 	PM_UNIT_MAX
 };
 
-void pm_init(uint32_t ram, uint32_t ramsz);
+void	pm_init(uint32_t ram, uint32_t ramsz);
+int	pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa);
+int	pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa);
 
 #endif
