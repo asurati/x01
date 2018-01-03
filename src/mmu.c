@@ -16,6 +16,7 @@
  */
 
 #include <mmu.h>
+#include <string.h>
 
 extern char KMODE_VA;
 extern char pt_start;
@@ -81,7 +82,6 @@ void mmu_tlb_invalidate(void *va, size_t sz)
 
 void mmu_init()
 {
-	int i;
 	uint32_t v;
 	uintptr_t *pd, *pt, pa, te;
 	void *va;
@@ -96,8 +96,7 @@ void mmu_init()
 
 	/* Remove the 4MB identity map. */
 	pd = (uintptr_t *)&k_pd_start;
-	for (i = 0; i < 4; ++i)
-		pd[i] = 0;
+	memset(pd, 0, 4 * sizeof(pd[0]));
 
 	mmu_dcache_clean(pd, 4 * sizeof(uintptr_t));
 	mmu_tlb_invalidate(NULL, 1024 * PAGE_SIZE);
