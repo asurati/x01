@@ -104,7 +104,7 @@ void boot_map()
 	pa = (uintptr_t)&k_pta_pt_pa;
 	pt = (void *)(pa + 0x408);
 	te = 0;
-	BF_SET(te, PTE_TYPE, 1);	/* Small Page. */
+	BF_SET(te, PTE_TYPE, 2);	/* Small Page. */
 	BF_SET(te, PTE_AP, 1);		/* Supervisor-only. */
 	BF_SET(te, PTE_SP_XN, 1);	/* No Execute. */
 	BF_SET(te, PTE_C, 1);		/* I/O WB, AoW. */
@@ -134,7 +134,7 @@ void boot_map()
 			te = 0;
 			c = si[i].desc;
 
-			BF_SET(te, PTE_TYPE, 1);	/* Small Page. */
+			BF_SET(te, PTE_TYPE, 2);	/* Small Page. */
 			BF_SET(te, PTE_AP, 1);		/* Supervisor-only. */
 
 			/* no execute. */

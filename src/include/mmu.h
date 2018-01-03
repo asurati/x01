@@ -67,7 +67,7 @@ extern const uintptr_t pt_area_va;
 
 #define PTE_SP_XN_POS		 0
 #define PTE_LP_XN_POS		15
-#define PTE_TYPE_POS		 1
+#define PTE_TYPE_POS		 0
 #define PTE_B_POS		 2
 #define PTE_C_POS		 3
 #define PTE_AP_POS		 4
@@ -81,7 +81,7 @@ extern const uintptr_t pt_area_va;
 
 #define PTE_SP_XN_SZ		 1
 #define PTE_LP_XN_SZ		 1
-#define PTE_TYPE_SZ		 1
+#define PTE_TYPE_SZ		 2
 #define PTE_B_SZ		 1
 #define PTE_C_SZ		 1
 #define PTE_AP_SZ		 2
@@ -119,7 +119,55 @@ void mmu_dcache_clean_mcrr(void *va, size_t sz);
 			     : : "r" (0)); \
 	} while (0)
 
-void mmu_init();
-void mmu_dcache_clean(void *va, size_t sz);
-void mmu_tlb_invalidate(void *va, size_t sz);
+enum mmu_mem_type {
+			/* TEX C B */
+        MT_SO,		/* 000 0 0 */
+        MT_DEV_SHR,	/* 000 0 1 */
+        MT_NRM_WTNA,	/* 000 1 0 */
+        MT_NRM_WBNA,	/* 000 1 1 */
+        MT_NRM_NC,	/* 001 0 0 */
+        MT_RES0,	/* 001 0 1 */
+        MT_RES1,	/* 001 1 0 */
+        MT_NRM_WBA,	/* 001 1 1 */
+        MT_DEV_NS,	/* 010 0 0 */
+	MT_MAX
+};
+
+enum mmu_access_perm {
+			/* APX AP */
+        AP_NA0,		/*   0 00 */
+        AP_SRW,		/*   0 01 */
+        AP_SRW_URO,	/*   0 10 */
+        AP_FULL,	/*   0 11 */
+        AP_NA1,		/*   1 00 */
+        AP_SRO,		/*   1 01 */
+        AP_SRO_URO,	/*   1 10 */
+	AP_MAX
+};
+
+enum mmu_map_unit {
+	MAP_UNIT_PAGE,
+	MAP_UNIT_LARGE_PAGE,
+	MAP_UNIT_SECTION,
+	MAP_UNIT_SUPER_SECTION,
+	MAP_UNIT_MAX
+};
+
+struct mmu_map_req {
+	int n;
+	void *va_start;
+	uintptr_t pa_start;
+	enum mmu_mem_type mt;
+	enum mmu_access_perm ap;
+	enum mmu_map_unit mu;
+	char exec;
+	char global;
+	char shared;
+	char domain;
+};
+
+void	mmu_init();
+void	mmu_dcache_clean(void *va, size_t sz);
+void	mmu_tlb_invalidate(void *va, size_t sz);
+int	mmu_map(void *pd, const struct mmu_map_req *r);
 #endif
