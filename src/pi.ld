@@ -56,6 +56,11 @@ SECTIONS
 		. += 0x1000;
 		stack_hi = .;
 		stack_hi_pa = . - KMODE_VA;
+
+		/* Buddy map for RAM. 4 pages. */
+		bdy_map_start = .;
+		. += 0x4000;
+
 		*(.bss);
 		bss_end = .;
 	}
@@ -77,6 +82,10 @@ SECTIONS
 		. += 0x1000;
 		ptab_end = .;
 	}
+
+	ram_static_use_end_pa = . - KMODE_VA;
+
+	/* The below allocations are purely VA allocations. */
 
 	. = ASSERT(. < (KMODE_VA + 0x800000), "kernel too big.");
 

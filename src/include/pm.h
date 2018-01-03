@@ -15,33 +15,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <mmu.h>
-#include <pm.h>
+#ifndef _PM_H_
+#define _PM_H_
 
-void kmain(const void *al)
-{
-	uint32_t ram, ramsz;
-	const uint32_t *p = al;
+#include <bdy.h>
 
-	/* Search the atag list for RAM details. */
-	ram = ramsz = 0;
-	while (1) {
-		if (p[0] == 0 && p[1] == 0)
-			break;
+/* PM_UNIT_MAX must equal BDY_NLEVELS. */
+enum pm_alloc_units {
+	PM_UNIT_4KB,
+	PM_UNIT_8KB,
+	PM_UNIT_16KB,
+	PM_UNIT_32KB,
+	PM_UNIT_64KB,
+	PM_UNIT_128KB,
+	PM_UNIT_256KB,
+	PM_UNIT_512KB,
+	PM_UNIT_1MB,
+	PM_UNIT_2MB,
+	PM_UNIT_MAX
+};
 
-		/* ATAG_MEM */
-		if (p[1] == 0x54410002) {
-			ramsz = p[2];
-			ram = p[3];
-			break;
-		}
-		p += p[0];
-	}
+void pm_init(uint32_t ram, uint32_t ramsz);
 
-	mmu_init();
-	pm_init(ram, ramsz);
-
-	while (1)
-		asm volatile("wfi");
-}
-
+#endif
