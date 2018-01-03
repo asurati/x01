@@ -16,9 +16,33 @@
  */
 
 #include <mmu.h>
-void kmain()
+
+void kmain(const void *al)
 {
+	uint32_t ram, ramsz;
+	const uint32_t *p = al;
+
+	/* Search the atag list for RAM details. */
+	ram = ramsz = 0;
+	while (1) {
+		if (p[0] == 0 && p[1] == 0)
+			break;
+
+		/* ATAG_MEM */
+		if (p[1] == 0x54410002) {
+			ramsz = p[2];
+			ram = p[3];
+			break;
+		}
+		p += p[0];
+	}
+
+	ram = ram;
+	if (ramsz == 0)
+		goto hang;
+
 	mmu_init();
+hang:
 	while (1)
 		asm volatile("wfi");
 }

@@ -23,6 +23,9 @@ start:
 	/* Set stack. */
 	ldr	sp, =stack_hi_pa
 
+	/* Save the pointer to the atag list. */
+	push	{r2}
+
 	/* Restrict ICache and DCache to 16KB each. Avoids page colouring. */
 	mrc	p15, 0, r0, c1, c0, 1		@ Auxiliary Control
 	orr	r0, #(1 << 6)			@ CZ bit
@@ -61,6 +64,9 @@ start:
 	bl	_dsb
 
 	mcr	p15, 0, r0, c7, c5, 4		@ Flush Prefetch Buffer
+
+	/* Pop the pointer to the atag list into r0. */
+	pop	{r0}
 
 	ldr	sp, =stack_hi
 	ldr	pc, =kmain
