@@ -158,16 +158,14 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 	 * requested.
 	 */
 
-	mask = (1 << map_units[r->mu]);
-	mask <<= PAGE_SIZE_SZ;
-	--mask;
+	inc = 1 << (map_units[r->mu] + PAGE_SIZE_SZ);
+	mask = inc - 1;
 
 	va = (uintptr_t)r->va_start;
 	pa = r->pa_start;
 	assert((va & mask) == 0);
 	assert((pa & mask) == 0);
 
-	inc = 1 << (map_units[r->mu] + PAGE_SIZE_SZ);
 	n = nunits[r->mu];
 
 	if (r->mu == MAP_UNIT_SECTION || r->mu == MAP_UNIT_SUPER_SECTION) {
@@ -312,7 +310,97 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 			for (k = 0; k < n; ++k)
 				pt[k] = te;
 
-			mmu_dcache_clean(&pt[j], n * sizeof(uintptr_t));
+			mmu_dcache_clean(pt, n * sizeof(uintptr_t));
+		}
+	}
+	return 0;
+}
+
+int mmu_unmap(void *_pd, const struct mmu_map_req *r)
+{
+	int i, j, k, n;
+	const int nunits[4] = {1, 16, 1, 16};
+	uintptr_t mask, va, pa, inc, *pd, tva, tpa, *pt;
+
+	assert(r && r->n > 0);
+	assert(r->mu < MAP_UNIT_MAX);
+
+	if (_pd == NULL)
+		pd = (uintptr_t *)&k_pd_start;
+	else
+		pd = _pd;
+
+	/* The addresses must be aligned corresponding to the unit
+	 * requested.
+	 */
+	inc = 1 << (map_units[r->mu] + PAGE_SIZE_SZ);
+	mask = inc - 1;
+
+	va = (uintptr_t)r->va_start;
+	pa = r->pa_start;
+	assert((va & mask) == 0);
+	assert((pa & mask) == 0);
+
+	n = nunits[r->mu];
+
+	if (r->mu == MAP_UNIT_SECTION || r->mu == MAP_UNIT_SUPER_SECTION) {
+		for (i = 0; i < r->n; ++i, va += inc, pa += inc) {
+			/* Prevent overflow. */
+			assert(va >= (uintptr_t)r->va_start);
+			assert(pa >= r->pa_start);
+
+			mmu_tlb_invalidate((void *)va, inc);
+
+			j = BF_GET(va, VA_PDE_IX);
+
+			/* TODO: dec refcount on the frames. */
+
+			for (k = 0; k < n; ++k)
+				pd[j + k] = 0;
+
+			mmu_dcache_clean(&pd[j], n * sizeof(uintptr_t));
+		}
+	} else {
+		for (i = 0; i < r->n; ++i, va += inc, pa += inc) {
+			/* Prevent overflow. */
+			assert(va >= (uintptr_t)r->va_start);
+			assert(pa >= r->pa_start);
+
+			mmu_tlb_invalidate((void *)va, inc);
+
+			/* We link a PAGE_SIZE page as a PT at the 4MB
+			 * boundary. Check if the de has a valid PT
+			 * populated.
+			 */
+			tva = ALIGN_DN(va, 4 * 1024 * 1024);
+			j = BF_GET(tva, VA_PDE_IX);
+
+			k = BF_GET(pd[j], PDE_TYPE0);
+			assert(k == 1);
+
+			/* All 4 de must be filled with PT. */
+			tpa = BF_PULL(pd[j + 0], PDE_PT_BASE);
+
+			/* The 0th de's PT must be PAGE aligned. */
+			assert(ALIGNED(tpa, PAGE_SIZE));
+			assert(BF_PULL(pd[j + 1], PDE_PT_BASE) ==
+			       tpa + 0x400);
+			assert(BF_PULL(pd[j + 2], PDE_PT_BASE) ==
+			       tpa + 0x400 * 2);
+			assert(BF_PULL(pd[j + 3], PDE_PT_BASE) ==
+			       tpa + 0x400 * 3);
+
+			pt = get_pte_va((void *)va);
+
+			/* TODO: dec refcount on the frames. */
+
+			for (k = 0; k < n; ++k)
+				pt[k] = 0;
+
+			/* TODO: check if an entire PT is now empty. If so,
+			 * free it too.
+			 */
+			mmu_dcache_clean(pt, n * sizeof(uintptr_t));
 		}
 	}
 	return 0;

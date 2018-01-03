@@ -170,4 +170,5 @@ void	mmu_init();
 void	mmu_dcache_clean(void *va, size_t sz);
 void	mmu_tlb_invalidate(void *va, size_t sz);
 int	mmu_map(void *pd, const struct mmu_map_req *r);
+int	mmu_unmap(void *pd, const struct mmu_map_req *r);
 #endif
