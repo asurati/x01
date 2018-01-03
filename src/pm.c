@@ -20,7 +20,7 @@
 #include <pm.h>
 #include <string.h>
 
-struct bdy bdy_ram;
+static struct bdy bdy_ram;
 
 void pm_init(uint32_t ram, uint32_t ramsz)
 {
