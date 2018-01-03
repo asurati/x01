@@ -30,6 +30,8 @@
 #error "unsupported compiler or architecture."
 #endif
 
+#define STRINGIZE(x) #x
+
 #define container_of(p, t, m) \
 	(t *)((char *)p - offsetof(t, m))
 
