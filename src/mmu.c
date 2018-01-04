@@ -355,8 +355,7 @@ int mmu_unmap(void *_pd, const struct mmu_map_req *r)
 
 			/* TODO: dec refcount on the frames. */
 
-			for (k = 0; k < n; ++k)
-				pd[j + k] = 0;
+			memset(&pd[j], 0, n * sizeof(uintptr_t));
 
 			mmu_dcache_clean(&pd[j], n * sizeof(uintptr_t));
 		}
@@ -394,8 +393,7 @@ int mmu_unmap(void *_pd, const struct mmu_map_req *r)
 
 			/* TODO: dec refcount on the frames. */
 
-			for (k = 0; k < n; ++k)
-				pt[k] = 0;
+			memset(pt, 0, n * sizeof(uintptr_t));
 
 			/* TODO: check if an entire PT is now empty. If so,
 			 * free it too.
