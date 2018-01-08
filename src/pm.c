@@ -37,7 +37,7 @@ void pm_init(uint32_t ram, uint32_t ramsz)
 	extern char rodata_start, rodata_end;
 	extern char data_start, data_end;
 	extern char bss_start, bss_end;
-	extern char k_pd_start, k_pd_end;
+	extern char ptab_start, ptab_end;
 	struct section {
 		uintptr_t start;
 		uintptr_t end;
@@ -46,7 +46,7 @@ void pm_init(uint32_t ram, uint32_t ramsz)
 		{(uintptr_t)&rodata_start,	(uintptr_t)&rodata_end},
 		{(uintptr_t)&data_start,	(uintptr_t)&data_end},
 		{(uintptr_t)&bss_start,		(uintptr_t)&bss_end},
-		{(uintptr_t)&k_pd_start,	(uintptr_t)&k_pd_end},
+		{(uintptr_t)&ptab_start,	(uintptr_t)&ptab_end},
 	};
 
 
