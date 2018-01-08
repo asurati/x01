@@ -96,6 +96,8 @@ void mmu_init()
 	uintptr_t *pd, *pt, pa, te;
 	void *va;
 	extern char k_pt_pa;
+	extern char ram_map_start;
+	extern char ram_map_pt_pa;
 
 	/* Disable the table walk for TTBR0. */
 	asm volatile("mrc	p15, 0, %0, c2, c0, 2\n\t"
@@ -133,6 +135,14 @@ void mmu_init()
         BF_SET(te, PTE_SP_TEX, 1);
         BF_PUSH(te, PTE_SP_BASE, pa);
         pt[0] = te;
+	mmu_dcache_clean(pt, sizeof(uintptr_t));
+
+	/* Map the ram map PT at the appropriate location. */
+	va = get_pte_va(&ram_map_start);
+	pt = get_pte_va(va);
+	pa = (uintptr_t)&ram_map_pt_pa;
+	BF_PUSH(te, PTE_SP_BASE, pa);
+	pt[0] = te;
 	mmu_dcache_clean(pt, sizeof(uintptr_t));
 }
 

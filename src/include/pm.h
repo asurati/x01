@@ -18,6 +18,7 @@
 #ifndef _PM_H_
 #define _PM_H_
 
+#include <atomic.h>
 #include <bdy.h>
 
 /* PM_UNIT_MAX must equal BDY_NLEVELS. */
@@ -42,6 +43,39 @@ enum pm_alloc_units {
 #define PM_UNIT_LARGE_PAGE	PM_UNIT_64KB
 #define PM_UNIT_SECTION		PM_UNIT_1MB
 #define PM_UNIT_SUPER_SECTION	PM_UNIT_16MB
+
+/* If the struct is for a page which is a subordinate page to
+ * either a large page, a section or a super section, then all
+ * fields (except the TYPE bit) on such a subordinate are free
+ * and can be used by the leader page as an extension.
+ *
+ * Whether a page is a leader can be known by the physical address
+ * and the type.
+ *
+ * The busy/free bit for the page is stored in the buddy bitmap.
+ */
+
+#define PGF_USE_NORMAL			0
+#define PGF_USE_SLUB			1
+
+/* PGF_UNIT has the same values as enum pm_alloc_units.
+ * The UNIT allocation implies physically contiguous memory. Thus,
+ * a successful allocation of a super section implies a physically
+ * contiguous range of 16MB memory.
+ */
+#define PGF_UNIT_POS			0
+#define PGF_UNIT_SZ			4
+#define PGF_USE_POS			4
+#define PGF_USE_SZ			1
+
+struct page {
+	uint32_t flags;
+	union {
+		struct atomic ref;
+		uint32_t slub;		/* PGF_USE_SLUB. */
+	} u0;
+
+};
 
 void	pm_init(uint32_t ram, uint32_t ramsz);
 int	pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa);

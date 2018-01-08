@@ -46,7 +46,7 @@ CFLAGS := -c -mcpu=arm1176jzf-s -ffreestanding -nostdlib -O3 -Wall -Wextra \
 	  -Werror -I ./include/ -fno-common -D$(BOARD) -g
 AFLAGS := -mcpu=arm1176jzf-s
 
-OBJS := start.o boot.o main.o mmu.o bdy.o pm.o
+OBJS := start.o boot.o main.o mmu.o bdy.o pm.o atomic.o
 OBJS += lib/string.o lib/assert.o
 
 IMG_ENTRY = 0x$(shell xxd -l 4 -s 0x18 -e $(ELF) | cut -c11-18)

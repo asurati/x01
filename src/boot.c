@@ -54,6 +54,8 @@ void boot_map()
 	extern char k_pt_pa;
 	extern char k_pta_pt_pa;
 	extern char pt_start;
+	extern char ram_map_pt_pa;
+	extern char ram_map_start;
 	extern char KMODE_VA;
 
 	pt = (uintptr_t *)&k_pta_pt_pa;
@@ -89,6 +91,17 @@ void boot_map()
 	va = (uintptr_t)&pt_start;
 	j = BF_GET(va, VA_PDE_IX);
 	pa = (uintptr_t)&k_pta_pt_pa;
+	for (i = 0; i < 4; ++i, pa += 0x400) {
+		de = 0;
+		BF_SET(de, PDE_TYPE0, 1);
+		BF_PUSH(de, PDE_PT_BASE, pa);
+		pd[i + j] = de;
+	}
+
+	/* Fill in the PDEs for the ram map PT . */
+	va = (uintptr_t)&ram_map_start;
+	j = BF_GET(va, VA_PDE_IX);
+	pa = (uintptr_t)&ram_map_pt_pa;
 	for (i = 0; i < 4; ++i, pa += 0x400) {
 		de = 0;
 		BF_SET(de, PDE_TYPE0, 1);

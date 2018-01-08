@@ -57,7 +57,7 @@ SECTIONS
 		stack_hi = .;
 		stack_hi_pa = . - KMODE_VA;
 
-		/* Buddy map for RAM. 4 pages. */
+		/* Buddy map for RAM. 2 pages. */
 		bdy_map_start = .;
 		. += 0x2000;
 
@@ -80,6 +80,9 @@ SECTIONS
 		k_pta_pt = .;
 		k_pta_pt_pa = . - KMODE_VA;
 		. += 0x1000;
+
+		ram_map_pt_pa = . - KMODE_VA;
+		. += 0x1000;
 		ptab_end = .;
 	}
 
@@ -93,4 +96,12 @@ SECTIONS
 	/* Page Tables area. */
 	pt_start = .;
 	. += 0x400000;
+
+	/* KMODE_VA + 0xc00000. */
+
+	/* struct page array for RAM. Reserve 1MB VA space to allow us to
+	 * be flexible with the size of the struct.
+	 */
+	ram_map_start = .;
+	. += 0x100000;
 }
