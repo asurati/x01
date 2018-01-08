@@ -111,7 +111,7 @@ int bdy_alloc(struct bdy *b, int level, int *out)
 
 	/* Self and Ancestor bits. */
 	for (i = level; i < BDY_NLEVELS; ++i, j >>= 1)
-		bdy_set(b, level, j);
+		bdy_set(b, i, j);
 
 	j = pos;
 	/* Descendant bits. */
@@ -147,7 +147,7 @@ int bdy_free(struct bdy *b, int level, int pos)
 	j = pos;
 	/* Self and Ancestor bits. */
 	for (i = level; i < BDY_NLEVELS; ++i, j >>= 1) {
-		bdy_clr(b, level, j);
+		bdy_clr(b, i, j);
 
 		/* Check the sibling. */
 		if (j & 1)
