@@ -59,7 +59,7 @@ SECTIONS
 
 		/* Buddy map for RAM. 4 pages. */
 		bdy_map_start = .;
-		. += 0x4000;
+		. += 0x2000;
 
 		*(.bss);
 		bss_end = .;

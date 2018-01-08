@@ -38,11 +38,11 @@ void pm_init(uint32_t ram, uint32_t ramsz)
 	if (ramsz > _128mb)
 		ramsz = _128mb;
 
-	/* The map must be a maximum of 4 pages long. */
+	/* The map must be a maximum of 2 pages long. */
 	npfns = ramsz >> PAGE_SIZE_SZ;
 	mapsz = ALIGN_UP(bdy_map_size(npfns), PAGE_SIZE);
 	mapsz >>= PAGE_SIZE_SZ;
-	assert(mapsz > 0 && mapsz < 5);
+	assert(mapsz > 0 && mapsz < 3);
 	bdy_init(&bdy_ram, (void *)&bdy_map_start, npfns);
 
 	/* Reserve the first 8MB of RAM. */
