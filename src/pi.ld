@@ -88,6 +88,9 @@ SECTIONS
 
 	/* The below allocations are purely VA allocations. */
 
+	slub_16byte_start = .;
+	. += 0x1000;
+
 	. = ASSERT(. < (KMODE_VA + 0x800000), "kernel too big.");
 
 	/* Allow the kernel binary to grow about 8MB. */

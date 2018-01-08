@@ -55,8 +55,10 @@ enum pm_alloc_units {
  * The busy/free bit for the page is stored in the buddy bitmap.
  */
 
-#define PGF_USE_NORMAL			0
-#define PGF_USE_SLUB			1
+enum pm_page_usage {
+	PGF_USE_NORMAL,
+	PGF_USE_SLUB
+};
 
 /* PGF_UNIT has the same values as enum pm_alloc_units.
  * The UNIT allocation implies physically contiguous memory. Thus,
@@ -77,8 +79,10 @@ struct page {
 
 };
 
-void	pm_init(uint32_t ram, uint32_t ramsz);
-int	pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa);
-int	pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa);
-
+void		pm_init(uint32_t ram, uint32_t ramsz);
+int		pm_ram_alloc(enum pm_alloc_units unit, enum pm_page_usage use,
+			     int n, uintptr_t *pa);
+int		pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use,
+			    int n, const uintptr_t *pa);
+struct page	*pm_ram_get_page(uintptr_t pa);
 #endif

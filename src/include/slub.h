@@ -15,35 +15,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <mmu.h>
-#include <pm.h>
-#include <slub.h>
+#ifndef _SLUB_H_
+#define _SLUB_H_
 
-void kmain(const void *al)
-{
-	uint32_t ram, ramsz;
-	const uint32_t *p = al;
+#include <types.h>
 
-	/* Search the atag list for RAM details. */
-	ram = ramsz = 0;
-	while (1) {
-		if (p[0] == 0 && p[1] == 0)
-			break;
+/* Slub supports allocations of sizes
+ * 8,16,32,64,128,256,512,1K,2K,4K,
+ * 8K,16K,32K,64K,128K,256K,512K,1M,2M,4M,
+ * 8M,16M,32M,64M
+ */
 
-		/* ATAG_MEM */
-		if (p[1] == 0x54410002) {
-			ramsz = p[2];
-			ram = p[3];
-			break;
-		}
-		p += p[0];
-	}
-
-	mmu_init();
-	pm_init(ram, ramsz);
-	slub_init();
-
-	while (1)
-		asm volatile("wfi");
-}
-
+void	slub_init();
+void	*kmalloc(size_t sz);
+void	kfree(void *p);
+#endif

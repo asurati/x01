@@ -22,10 +22,11 @@
 
 static struct bdy bdy_ram;
 static struct page *ram_map;
+static size_t ramsz;
 
 static int	_pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa);
 
-void pm_init(uint32_t ram, uint32_t ramsz)
+void pm_init(uint32_t ram, uint32_t _ramsz)
 {
 	int i, j, mapsz, npfns, ret;
 	size_t _128mb;
@@ -48,6 +49,8 @@ void pm_init(uint32_t ram, uint32_t ramsz)
 		{(uintptr_t)&bss_start,		(uintptr_t)&bss_end},
 		{(uintptr_t)&ptab_start,	(uintptr_t)&ptab_end},
 	};
+
+	ramsz = _ramsz;
 
 
 	/* For RPi, the RAM start is expected to be at physical zero. */
@@ -159,10 +162,12 @@ static int _pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa)
 	return ret;
 }
 
-int pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa)
+int pm_ram_alloc(enum pm_alloc_units unit, enum pm_page_usage use, int n,
+		 uintptr_t *pa)
 {
 	int i, j, ret;
 	uintptr_t t;
+	struct page *pg;
 
 	ret = _pm_ram_alloc(unit, n, pa);
 	if (ret)
@@ -171,8 +176,13 @@ int pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa)
 	for (i = 0; i < n; ++i) {
 		t = pa[i] >> PAGE_SIZE_SZ;
 		for (j = 0; j < (1 << unit); ++j) {
-			BF_SET(ram_map[t + j].flags, PGF_UNIT, unit);
-			atomic_set(&ram_map[t + j].u0.ref, 1);
+			pg = &ram_map[t + j];
+			memset(pg, 0, sizeof(*pg));
+
+			BF_SET(pg->flags, PGF_UNIT, unit);
+			BF_SET(pg->flags, PGF_USE, use);
+			if (use == PGF_USE_NORMAL)
+				atomic_set(&ram_map[t + j].u0.ref, 1);
 		}
 	}
 
@@ -180,10 +190,13 @@ int pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa)
 }
 
 
-int pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa)
+int pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use, int n,
+		const uintptr_t *pa)
 {
 	int i, j, ret;
 	uintptr_t p, mask;
+	struct page *pg;
+
 	assert(unit < PM_UNIT_MAX);
 
 	mask = (1 << unit) - 1;
@@ -202,13 +215,17 @@ int pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa)
 			break;
 			*/
 
-		/* The struct page flags must reflect the unit, and the
-		 * ref counts on them must be 1.
+
+		/* The struct page flags must reflect the unit, the use,
+		 * and an appropriate ref count.
 		 */
 		for (j = 0; j < (1 << unit); ++j) {
-			assert(BF_GET(ram_map[p + j].flags, PGF_UNIT) ==
-			       unit);
-			assert(atomic_read(&ram_map[p + j].u0.ref) == 1);
+			pg = &ram_map[p + j];
+			assert(BF_GET(pg->flags, PGF_UNIT) == unit);
+			assert(BF_GET(pg->flags, PGF_USE) == use);
+			if (use == PGF_USE_NORMAL)
+				assert(atomic_read(&ram_map[p + j].u0.ref) ==
+				       1);
 			/*
 			if (BF_GET(ram_map[p + j].flags, PGF_UNIT) != unit)
 				break;
@@ -236,4 +253,11 @@ int pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa)
 
 	ret = 0;
 	return ret;
+}
+
+struct page *pm_ram_get_page(uintptr_t pa)
+{
+	assert(pa < ramsz);
+	pa >>= PAGE_SIZE_SZ;
+	return &ram_map[pa];
 }

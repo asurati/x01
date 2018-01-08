@@ -266,6 +266,7 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 					       PAGE_SIZE));
 
 				ret = pm_ram_alloc(PM_UNIT_PAGE, 1,
+						   PGF_USE_NORMAL,
 						   &tr.pa_start);
 				assert(ret == 0);
 
