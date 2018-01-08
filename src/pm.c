@@ -188,36 +188,53 @@ int pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa)
 
 	mask = (1 << unit) - 1;
 	for (i = 0; i < n; ++i) {
+		/*
 		ret = -1;
+		*/
 		p = pa[i] >> PAGE_SIZE_SZ;
 
 		/* The input addresses must be aligned according to
 		 * the unit passed.
 		 */
+		assert((p & mask) == 0);
+		/*
 		if (p & mask)
 			break;
+			*/
 
 		/* The struct page flags must reflect the unit, and the
 		 * ref counts on them must be 1.
 		 */
 		for (j = 0; j < (1 << unit); ++j) {
+			assert(BF_GET(ram_map[p + j].flags, PGF_UNIT) ==
+			       unit);
+			assert(atomic_read(&ram_map[p + j].u0.ref) == 1);
+			/*
 			if (BF_GET(ram_map[p + j].flags, PGF_UNIT) != unit)
 				break;
 			if (atomic_read(&ram_map[p + j].u0.ref) != 1)
 				break;
+				*/
 		}
 
+		/*
 		if (j != (1 << unit))
 			break;
+			*/
 
 		/* The page must be busy in the buddy bitmap. */
 		p >>= unit;
 		ret = bdy_free(&bdy_ram, unit, p);
+		assert(ret == 0);
+		/*
 		if (ret)
 			break;
+			*/
 
 		for (j = 0; j < (1 << unit); ++j)
 			atomic_set(&ram_map[p + j].u0.ref, 0);
 	}
+
+	ret = 0;
 	return ret;
 }
