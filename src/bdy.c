@@ -100,7 +100,7 @@ int bdy_alloc(struct bdy *b, int level, int *out)
 {
 	int i, j, k, pos;
 
-	for (i = 0; i < b->nbits[i]; ++i)
+	for (i = 0; i < b->nbits[level]; ++i)
 		if (!bdy_is_set(b, level, i))
 			break;
 
