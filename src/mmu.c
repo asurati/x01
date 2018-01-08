@@ -36,7 +36,7 @@ static const enum pm_alloc_units map_units[MAP_UNIT_MAX] = {
 };
 
 /* VA to PTE VA. */
-static void *get_pte_va(void *va)
+static void *get_pte_va(const void *va)
 {
 	uintptr_t r;
 	r  = pt_area_va;
@@ -413,4 +413,48 @@ int mmu_unmap(void *_pd, const struct mmu_map_req *r)
 		}
 	}
 	return 0;
+}
+
+uintptr_t mmu_va_to_pa(const void *_pd, const void *p)
+{
+	int i, j;
+	const uintptr_t *pd = _pd;
+	uintptr_t va, tva, pa, *pt;
+
+	if (_pd == NULL)
+		pd = (uintptr_t *)&k_pd_start;
+
+	tva = (uintptr_t)p;
+	va = ALIGN_DN(tva, PAGE_SIZE);
+	i = BF_GET(va, VA_PDE_IX);
+	j = BF_GET(pd[i], PDE_TYPE0);
+
+	assert(j == 1 || j == 2);
+
+	if (j == 2) {
+		j = BF_GET(pd[i], PDE_TYPE1);
+		if (j == 0) {
+			pa = BF_PULL(pd[i], PDE_S_BASE);
+			pa += tva & ~BF_SMASK(PDE_S_BASE);
+		} else {
+			pa = BF_PULL(pd[i], PDE_SS_BASE);
+			pa += tva & ~BF_SMASK(PDE_SS_BASE);
+		}
+		return pa;
+	}
+
+	/* Since the VA is mapped through a page table, we can assume that
+	 * the PT is accessible.
+	 */
+	pt = get_pte_va(p);
+	j = BF_GET(pt[0], PTE_TYPE);
+	assert(j);
+	if (j == 1) {
+		pa = BF_PULL(pt[0], PTE_LP_BASE);
+		pa += tva & ~BF_SMASK(PTE_LP_BASE);
+	} else {
+		pa = BF_PULL(pt[0], PTE_SP_BASE);
+		pa += tva & (~BF_SMASK(PTE_SP_BASE));
+	}
+	return pa;
 }

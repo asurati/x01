@@ -70,11 +70,15 @@ enum pm_page_usage {
 #define PGF_USE_POS			4
 #define PGF_USE_SZ			1
 
+/* Only valid if PGF_USE_SLUB is true. */
+#define PGF_SLUB_SIZE_POS		5
+#define PGF_SLUB_SIZE_SZ		5
+
 struct page {
 	uint32_t flags;
 	union {
 		struct atomic ref;
-		uint32_t slub;		/* PGF_USE_SLUB. */
+		void *va;		/* struct slab. */
 	} u0;
 
 };
