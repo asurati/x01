@@ -88,8 +88,8 @@ SECTIONS
 
 	/* The below allocations are purely VA allocations. */
 
-	slub_16byte_start = .;
-	. += 0x1000;
+	slub_data_start = .;
+	. += 0x9000;
 
 	. = ASSERT(. < (KMODE_VA + 0x800000), "kernel too big.");
 

@@ -25,6 +25,7 @@
 #define SLUB_NSIZES		24
 #define SLUB_SUBPAGE_NSIZES	 9
 
+#define SLUB_ALLOC_SIZES_SZ	 3
 static const size_t slub_alloc_sizes[SLUB_NSIZES] = {
 	8,
 	16,
@@ -95,64 +96,97 @@ static struct list_head subpage_full_heads[SLUB_SUBPAGE_NSIZES];
 static struct list_head subpage_part_heads[SLUB_SUBPAGE_NSIZES];
 static struct list_head subpage_none_heads[SLUB_SUBPAGE_NSIZES];
 
-void slub_init()
+/* For each of the 9 sizes, we allocate one page as the data page
+ * p[0]. The struct slab for each of the 9 sizes are allocated
+ * from p[1], the 16 byte slab.
+ */
+
+void slub_subpage_init()
 {
-	int i, n, ret;
-	extern char slub_16byte_start;
-	uintptr_t pa, va;
-	struct mmu_map_req r;
-	struct page *pg;
+	int i, j, n, ret;
+	size_t sz;
 	struct slab *s;
+	struct page *pg;
+	struct mmu_map_req r;
+	uintptr_t pa[SLUB_SUBPAGE_NSIZES], t;
+	void *va[SLUB_SUBPAGE_NSIZES];
+	extern char slub_data_start;
+
+	assert(sizeof(struct slab) == 16);
 
 	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
 		init_list_head(&subpage_full_heads[i]);
 		init_list_head(&subpage_part_heads[i]);
 		init_list_head(&subpage_none_heads[i]);
 	}
-	assert(sizeof(struct slab) == 16);
 
-	s = (struct slab *)&slub_16byte_start;
-
-	ret = pm_ram_alloc(PM_UNIT_PAGE, PGF_USE_SLUB, 1, &pa);
+	ret = pm_ram_alloc(PM_UNIT_PAGE, PGF_USE_SLUB, SLUB_SUBPAGE_NSIZES, pa);
 	assert(ret == 0);
 
-	r.va_start = s;
-	r.pa_start = pa;
-	r.n = 1;
-	r.mt = MT_NRM_WBA;
-	r.ap = AP_SRW;
-	r.mu = MAP_UNIT_PAGE;
-	r.exec = 0;
-	r.global = 1;
-	r.shared = 0;
-	r.domain = 0;
+	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i)
+		va[i] = &slub_data_start + (i << PAGE_SIZE_SZ);
 
-	ret = mmu_map(NULL, &r);
-	assert(ret == 0);
+	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
+		r.va_start = va[i];
+		r.pa_start = pa[i];
+		r.n = 1;
+		r.mt = MT_NRM_WBA;
+		r.ap = AP_SRW;
+		r.mu = MAP_UNIT_PAGE;
+		r.exec = 0;
+		r.global = 1;
+		r.shared = 0;
+		r.domain = 0;
 
-	pg = pm_ram_get_page(pa);
-	assert(pg);
-	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
-	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
+		ret = mmu_map(NULL, &r);
+		assert(ret == 0);
 
-	BF_SET(pg->u0.slub, SLUB_SIZE, 1);
-	BF_SET(pg->u0.slub, SLUB_LEADER, 1);
-	memset(s, 0, PAGE_SIZE);
+		pg = pm_ram_get_page(pa[i]);
+		assert(pg);
+		assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
+		assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
 
-	/* The first object of this slab is utilized to allocate a
-	 * struct slab object for the 16byte allocation size
+		BF_SET(pg->u0.slub, SLUB_SIZE, i);
+		BF_SET(pg->u0.slub, SLUB_LEADER, 1);
+		memset(va[i], 0, PAGE_SIZE);
+	}
+
+	/* Set the free list on each page. */
+	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
+		s = va[1];
+		s += i;
+		s->p[0] = va[i];
+		t = (uintptr_t)s->p[0];
+		n = PAGE_SIZE >> (SLUB_ALLOC_SIZES_SZ + i);
+		sz = slub_alloc_sizes[i];
+
+		if (i == 1) {
+			j = 9;
+			list_add_tail(&s->entry, &subpage_part_heads[i]);
+			slub_16byte_free = n - 9;
+			t += j * sz;
+		} else {
+			j = 0;
+			list_add_tail(&s->entry, &subpage_none_heads[i]);
+		}
+
+		for (j = j; j < n; ++j, t += sz)
+			*(uint32_t *)t = j + 1;
+	}
+
+	/* Every page except that for 16byte allocation has all items free.
+	 * The 16byte allocations have the first 9 elements busy.
 	 */
-	va = (uintptr_t)s;
-	BF_SET(va, SLUB_FREE, 1);
-	s->p[0] = (void *)va;
+	s = va[1];
+	++s;	/* struct slab for 16byte allocation is at index 1. */
+	t = (uintptr_t)va[1];
+	BF_SET(t, SLUB_FREE, 9);
+	s->p[0] = (void *)t;
+}
 
-	n = PAGE_SIZE/sizeof(struct slab);
-	va = (uintptr_t)(s + 1);
-	for (i = 1; i < n; ++i, va += sizeof(struct slab))
-		*(uint32_t *)va = i + 1;
-
-	list_add_tail(&s->entry, &subpage_part_heads[1]);
-	slub_16byte_free = n - 1;
+void slub_init()
+{
+	slub_subpage_init();
 }
 
 struct slab *slub_scan(const struct list_head *h)
