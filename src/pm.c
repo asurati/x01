@@ -223,8 +223,7 @@ int pm_ram_free(enum pm_alloc_units unit, int n, const uintptr_t *pa)
 			*/
 
 		/* The page must be busy in the buddy bitmap. */
-		p >>= unit;
-		ret = bdy_free(&bdy_ram, unit, p);
+		ret = bdy_free(&bdy_ram, unit, p >> unit);
 		assert(ret == 0);
 		/*
 		if (ret)
