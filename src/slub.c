@@ -85,7 +85,7 @@ static struct list_head subpage_none_heads[SLUB_SUBPAGE_NSIZES];
 
 void slub_init()
 {
-	int i, j, n, ret;
+	int i, j, n, ret, shft;
 	size_t sz;
 	struct slab *s;
 	struct page *pg;
@@ -108,22 +108,27 @@ void slub_init()
 	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i)
 		va[i] = &slub_data_start + (i << PAGE_SIZE_SZ);
 
+	r.n = 1;
+	r.mt = MT_NRM_WBA;
+	r.ap = AP_SRW;
+	r.mu = MAP_UNIT_PAGE;
+	r.exec = 0;
+	r.global = 1;
+	r.shared = 0;
+	r.domain = 0;
+
 	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
 		r.va_start = va[i];
 		r.pa_start = pa[i];
-		r.n = 1;
-		r.mt = MT_NRM_WBA;
-		r.ap = AP_SRW;
-		r.mu = MAP_UNIT_PAGE;
-		r.exec = 0;
-		r.global = 1;
-		r.shared = 0;
-		r.domain = 0;
-
 		ret = mmu_map(NULL, &r);
 		assert(ret == 0);
-
 		memset(va[i], 0, PAGE_SIZE);
+	}
+
+	/* Set the free list on each page. */
+	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
+		s = va[1];
+		s += i;
 
 		pg = pm_ram_get_page(pa[i]);
 		assert(pg);
@@ -131,34 +136,26 @@ void slub_init()
 		assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
 
 		BF_SET(pg->flags, PGF_SLUB_SIZE, i);
-
-		s = va[1];
-		s += i;
 		t = (uintptr_t)s;
 		BF_SET(t, SLUB_LEADER, 1);
 		pg->u0.va = (void *)t;
-	}
 
-	/* Set the free list on each page. */
-	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
-		s = va[1];
-		s += i;
 		s->p = va[i];
+		shft = SLUB_ALLOC_SIZES_SZ + i;
 		t = (uintptr_t)s->p;
-		n = PAGE_SIZE >> (SLUB_ALLOC_SIZES_SZ + i);
+		n = PAGE_SIZE >> shft;
 		sz = slub_alloc_sizes[i];
-
-		s->free = 0;
-		s->nfree = n;
 
 		if (i == 1) {
 			j = SLUB_SUBPAGE_NSIZES;
-			list_add_tail(&s->entry, &subpage_part_heads[i]);
 			s->nfree = slub_16byte_free = n - j;
 			s->free = j;
-			t += j * sz;
+			t += j << shft;
+			list_add_tail(&s->entry, &subpage_part_heads[i]);
 		} else {
 			j = 0;
+			s->free = 0;
+			s->nfree = n;
 			list_add_tail(&s->entry, &subpage_none_heads[i]);
 		}
 
@@ -177,6 +174,7 @@ static struct slab *slub_alloc_slab(int ix)
 
 	sz = slub_alloc_sizes[ix];
 	n = PAGE_SIZE >> (SLUB_ALLOC_SIZES_SZ + ix);
+
 	/* Allocate a struct slab and a data page. */
 	s = kmalloc(sizeof(struct slab));
 	assert(s);
@@ -187,6 +185,7 @@ static struct slab *slub_alloc_slab(int ix)
 	memset(p, 0, PAGE_SIZE);
 
 	s->p = p;
+	s->nfree = n;
 	va = (uintptr_t)p;
 	for (i = 0; i < n; ++i, va += sz)
 		*(uint32_t *)va = i + 1;
@@ -195,7 +194,7 @@ static struct slab *slub_alloc_slab(int ix)
 
 void *kmalloc(size_t sz)
 {
-	int i, n;
+	int i, n, shft;
 	void *p;
 	uintptr_t va;
 	struct slab *s;
@@ -212,7 +211,8 @@ void *kmalloc(size_t sz)
 
 	/* subpage allocations. */
 
-	n = PAGE_SIZE >> (SLUB_ALLOC_SIZES_SZ + i);
+	shft = SLUB_ALLOC_SIZES_SZ + i;
+	n = PAGE_SIZE >> shft;
 	h = &subpage_part_heads[i];
 	e = NULL;
 	if (list_empty(h))
@@ -227,7 +227,7 @@ void *kmalloc(size_t sz)
 		 */
 		assert(i != 1);
 		s = slub_alloc_slab(i);
-		list_add_tail(&s->entry, h);
+		list_add(&s->entry, h);
 	}
 
 	assert(!list_empty(h));
@@ -239,7 +239,7 @@ void *kmalloc(size_t sz)
 	va = (uintptr_t)s->p;
 
 	/* Get the pointer to the corresponding object. */
-	p = (void *)(va + (s->free  << (SLUB_ALLOC_SIZES_SZ + i)));
+	p = (void *)(va + (s->free << shft));
 	s->free = *(uint32_t *)p;
 	*(uint32_t *)p = 0;
 
@@ -273,7 +273,7 @@ void *kmalloc(size_t sz)
 
 void kfree(void *p)
 {
-	int i, j, n;
+	int i, j, n, shft;
 	uintptr_t pa, t;
 	struct page *pg;
 	struct slab *s;
@@ -298,21 +298,25 @@ void kfree(void *p)
 
 	assert(i < SLUB_SUBPAGE_NSIZES);
 
-	n = PAGE_SIZE >> (SLUB_ALLOC_SIZES_SZ + i);
+	/* subpage allocations occur in PAGE_SIZE pages. */
+	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
+
+	shft = SLUB_ALLOC_SIZES_SZ + i;
+	n = PAGE_SIZE >> shft;
 
 	/* The slab->p must be a single page for subpage allocations. */
 	assert(s->p <= p && p < s->p + PAGE_SIZE);
 
 	/* The pointer p must be appropriately aligned. */
-	t = (uintptr_t)p;
-	assert((t & (slub_alloc_sizes[i] - 1)) == 0);
+	assert(((uintptr_t)p & (slub_alloc_sizes[i] - 1)) == 0);
 
 	j = p - s->p;
-	j >>= (SLUB_ALLOC_SIZES_SZ + i);
+	j >>= shft;
 	assert(j < n);
 
-	/* Get the pointer to the corresponding object. */
-	//p = (void *)(t + (j << (SLUB_ALLOC_SIZES_SZ + i)));
+	/* Save the current free into the newly freed object,
+	 * and set the newly freed object as s->free.
+	 */
 	*(uint32_t *)p = s->free;
 	s->free = j;
 
