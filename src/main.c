@@ -18,6 +18,7 @@
 #include <mmu.h>
 #include <pm.h>
 #include <slub.h>
+#include <vm.h>
 
 void kmain(const void *al)
 {
@@ -42,6 +43,7 @@ void kmain(const void *al)
 	mmu_init();
 	pm_init(ram, ramsz);
 	slub_init();
+	vm_init();
 
 	while (1)
 		asm volatile("wfi");

@@ -92,7 +92,7 @@ void slub_init()
 	struct mmu_map_req r;
 	uintptr_t pa[SLUB_SUBPAGE_NSIZES], t;
 	void *va[SLUB_SUBPAGE_NSIZES];
-	extern char slub_data_start;
+	extern char vm_slub_start;
 
 	assert(sizeof(struct slab) == 16);
 
@@ -106,7 +106,7 @@ void slub_init()
 	assert(ret == 0);
 
 	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i)
-		va[i] = &slub_data_start + (i << PAGE_SIZE_SZ);
+		va[i] = &vm_slub_start + (i << PAGE_SIZE_SZ);
 
 	r.n = 1;
 	r.mt = MT_NRM_WBA;

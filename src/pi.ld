@@ -88,9 +88,6 @@ SECTIONS
 
 	/* The below allocations are purely VA allocations. */
 
-	slub_data_start = .;
-	. += 0x9000;
-
 	. = ASSERT(. < (KMODE_VA + 0x800000), "kernel too big.");
 
 	/* Allow the kernel binary to grow about 8MB. */
@@ -107,4 +104,10 @@ SECTIONS
 	 */
 	ram_map_start = .;
 	. += 0x100000;
+
+	. = 0xf0000000;
+	vm_slub_start = .;
+
+	. = 0xf8000000;
+	vm_dev_start = .;
 }
