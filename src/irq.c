@@ -72,6 +72,11 @@ void irq_init()
 	ret = mmu_unmap(NULL, &r);
 	assert(ret == 0);
 
+	/* Invalidate the TLB entries since the page will be
+	 * remapped with different parameters.
+	 */
+	mmu_tlb_invalidate(r.va_start, 16 * 4);
+
 	r.ap = AP_SRO;
 	r.exec = 1;
 
