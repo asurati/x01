@@ -110,4 +110,8 @@ SECTIONS
 
 	. = 0xf8000000;
 	vm_dev_start = .;
+
+	/* High Vectors. */
+	. = 0xffff0000;
+	vm_vec_start = .;
 }
