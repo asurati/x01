@@ -101,23 +101,47 @@ extern const uintptr_t pt_area_va;
 #define TTBCR_PD0_POS		 4
 #define TTBCR_PD0_SZ		 1
 
-#ifdef QRPI2
-
-#define mmu_dcache_clean mmu_dcache_clean_nomcrr
-void mmu_dcache_clean_nomcrr(void *va, size_t sz);
-
-#else /* QRPI2 */
-
-#define mmu_dcache_clean mmu_dcache_clean_mcrr
-void mmu_dcache_clean_mcrr(void *va, size_t sz);
-
-#endif /* QRPI2 */
-
 #define mmu_dsb() \
 	do { \
 		asm volatile("mcr	p15, 0, %0, c7, c10, 4\n\t" \
 			     : : "r" (0)); \
 	} while (0)
+
+#ifdef QRPI2
+
+static inline void mmu_dcache_clean(void *va, size_t sz)
+{
+	uintptr_t i, s, e;
+
+	if (sz <= 0)
+		return;
+
+	s = (uintptr_t)va;
+	e = s + sz;
+	for (i = s; i < e; i += CACHE_LINE_SIZE)
+		asm volatile("mcr	p15, 0, %0, c7, c10, 1\n\t"
+			     : : "r" (i));
+	mmu_dsb();
+}
+
+#else /* QRPI2 */
+
+static inline void mmu_dcache_clean(void *va, size_t sz)
+{
+	uintptr_t s, e;
+
+	if (sz <= 0)
+		return;
+
+	s = (uintptr_t)va;
+	e = s + sz - 1;
+	asm volatile("mcrr	p15, 0, %0, %1, c12\n\t"
+		     : : "r" (e), "r" (s));
+	mmu_dsb();
+}
+
+#endif /* QRPI2 */
+
 
 enum mmu_mem_type {
 			/* TEX C B */
@@ -167,7 +191,6 @@ struct mmu_map_req {
 };
 
 void	mmu_init();
-void	mmu_dcache_clean(void *va, size_t sz);
 void	mmu_tlb_invalidate(void *va, size_t sz);
 int	mmu_map(void *pd, const struct mmu_map_req *r);
 int	mmu_unmap(void *pd, const struct mmu_map_req *r);
