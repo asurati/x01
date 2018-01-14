@@ -44,35 +44,6 @@ static void *get_pte_va(const void *va)
 	return (void *)r;
 }
 
-void mmu_dcache_clean_nomcrr(void *va, size_t sz)
-{
-	uintptr_t i, s, e;
-
-	if (sz <= 0)
-		return;
-
-	s = (uintptr_t)va;
-	e = s + sz;
-	for (i = s; i < e; i += CACHE_LINE_SIZE)
-		asm volatile("mcr	p15, 0, %0, c7, c10, 1\n\t"
-			     : : "r" (i));
-	mmu_dsb();
-}
-
-void mmu_dcache_clean_mcrr(void *va, size_t sz)
-{
-	uintptr_t s, e;
-
-	if (sz <= 0)
-		return;
-
-	s = (uintptr_t)va;
-	e = s + sz - 1;
-	asm volatile("mcrr	p15, 0, %0, %1, c12\n\t"
-		     : : "r" (e), "r" (s));
-	mmu_dsb();
-}
-
 void mmu_tlb_invalidate(void *va, size_t sz)
 {
 	uintptr_t i, s, e;
