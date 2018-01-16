@@ -25,6 +25,11 @@ enum irq_dev {
 	IRQ_DEV_MAX
 };
 
+#define IRQH_RET_NONE		0
+#define IRQH_RET_HANDLED	(1 << 0)
+#define IRQH_RET_SOFT		(1 << 1)
+
+
 typedef int (*irq_fn)(void *data);
 
 void	irq_init();

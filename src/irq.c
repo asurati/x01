@@ -16,12 +16,6 @@
  */
 
 #include <assert.h>
-#include <atomic.h>
-#include <mmu.h>
-#include <pm.h>
-#include <slub.h>
-#include <string.h>
-#include <io.h>
 #include <irq.h>
 
 struct irq {
@@ -29,36 +23,46 @@ struct irq {
 	void *data;
 };
 
-static int irq_count;
+static char irq_soft_count;
 static struct irq irq_devs[IRQ_DEV_MAX];
-static struct atomic irq_soft;
+static uint32_t irq_soft_mask;
 
-/* irq_enter, irq_exit and excpt_irq called with IRQs disabled. */
-
-void irq_enter()
+int excpt_irq_soft()
 {
-	++irq_count;
-	assert(irq_count > 0);
+	/* If another instance of the function is running,
+	 * return.
+	 */
+	if (irq_soft_count)
+		return 0;
+
+	/* Without the "memory" barrier, the compiler optimizes
+	 * away the inc/dec of irq_soft_count, since it can prove
+	 * that the count remains unchanged within the function.
+	 */
+	irq_soft_count = 1;
+	asm volatile("cpsie i" : : : "memory", "cc");
+
+	asm volatile("cpsid i" : : : "memory", "cc");
+	irq_soft_count = 0;
+	return 0;
 }
 
-void irq_exit()
+int excpt_irq()
 {
-	--irq_count;
-	assert(irq_count >= 0);
-}
-
-void excpt_irq()
-{
-	int i;
+	int i, ret;
+	ret = 0;
 	for (i = 0; i < IRQ_DEV_MAX; ++i)
-		irq_devs[i].fn(irq_devs[i].data);
+		ret |= irq_devs[i].fn(irq_devs[i].data);
+	return ret;
 }
 
 void irq_init()
 {
-	irq_count = 0;
+	irq_soft_count = 0;
+	irq_soft_mask = 0;
+
 	/* Enable IRQs within CPSR. */
-	asm volatile("cpsie i");
+	asm volatile("cpsie i" : : : "cc");
 }
 
 int irq_insert(enum irq_dev dev, irq_fn fn, void *data)
@@ -72,7 +76,10 @@ int irq_insert(enum irq_dev dev, irq_fn fn, void *data)
 	return 0;
 }
 
+/* SoftIRQs are raised and dropped while the hardIRQs
+ * are disabled. Atomic unncessary.
+ */
 void irq_soft_raise(enum irq_dev dev)
 {
-	atomic_set(&irq_soft, 1 << dev);
+	irq_soft_mask |= 1 << dev;
 }
