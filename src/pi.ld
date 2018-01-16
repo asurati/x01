@@ -62,7 +62,7 @@ SECTIONS
 		. += 0x2000;
 
 		*(.bss);
-		. = ALIGN(0x10);
+		. = ALIGN(0x8);
 		. += 0x100;
 		irq_stack_hi = .;
 		. += 0x100;
