@@ -19,7 +19,6 @@
 
 .section .excpt,"ax"
 
-.globl excpt_vector
 excpt_vector:
 	ldr	pc, excpt_reset_addr
 	ldr	pc, excpt_undef_addr
@@ -46,15 +45,29 @@ excpt_fiq_addr:
 	.long excpt_fiq
 
 excpt_irq_addr:
-	sub	lr, lr, #4		@ adjust the return address.
-	push	{r0-r3, r12, lr}	@ save LR on the IRQ stack.
-
-	bl	irq_enter		@ An IRQ is under process.
+	sub	lr, lr, #4		@ Adjust the return address.
+	push	{r0-r3, r12, lr}	@ Save aapcs regs and lr.
 	bl	excpt_irq		@ IRQ handler.
-	bl	irq_exit		@ record exit from the handler.
+	and	r0, r0, #(1 << 1)	@ IRQH_RET_SOFT
+	beq	no_irq_soft
 
-	/* Switch to SYS mode, enable IRQs and process soft IRQs.
-	 * Then disable IRQs, switch back to IRQ mode and return.
-	 */
+	mrs	r0, spsr
+	push	{r0}			@ Save spsr_irq
+
+	cps	#31			@ Switch to SYS mode.
+	and 	r0, sp, #4		@ Align sp_sys to 8-byte boundary.
+	sub	sp, sp, r0
+	push	{r0, lr}		@ Save the alignment and lr_usr.
+
+	bl	excpt_irq_soft
+
+	pop	{r0, lr}		@ Undo
+	add	sp, sp, r0
+	cps	#18			@ Back to IRQ mode
+
+	pop	{r0}
+	msr	spsr, r0
+
+no_irq_soft:
 	pop	{r0-r3, r12, lr}
 	movs	pc, lr
