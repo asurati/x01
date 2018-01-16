@@ -19,26 +19,3 @@
 #include <io.h>
 #include <irq.h>
 #include <timer.h>
-
-/* RPi1 and RPi2 have System Timer at PA 0x20003000 and 0x3f003000,
- * respectively. A System Timer is implemented by the SoC.
- *
- * RPi2 additionally has Generic Timers, also called Core Timers,
- * which are implemented within the CPU.
- *
- * QRPI2 does not implement the System Timer.
- *
- * Hence, depending on the board selected, either the System Timer
- * or the Generic Timer must be implemented.
- */
-
-static int timer_irq(void *data)
-{
-	data = data;
-	return 0;
-}
-
-void timer_init()
-{
-	irq_insert(IRQ_DEV_TIMER, timer_irq, NULL);
-}

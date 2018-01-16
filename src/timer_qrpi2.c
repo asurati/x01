@@ -17,20 +17,6 @@
 
 #include <assert.h>
 #include <io.h>
-#include <irq.h>
-#include <timer.h>
-
-/* RPi1 and RPi2 have System Timer at PA 0x20003000 and 0x3f003000,
- * respectively. A System Timer is implemented by the SoC.
- *
- * RPi2 additionally has Generic Timers, also called Core Timers,
- * which are implemented within the CPU.
- *
- * QRPI2 does not implement the System Timer.
- *
- * Hence, depending on the board selected, either the System Timer
- * or the Generic Timer must be implemented.
- */
 
 enum timer_reg {
 	TMR_FREQ,
@@ -43,10 +29,11 @@ enum timer_reg {
 #define TMR_CTRL_MASK_POS		1
 #define TMR_CTRL_STATUS_POS		2
 #define TMR_CTRL_ENABLE_SZ		1
-#define TMR_CTRL_MASK_SZ			1
+#define TMR_CTRL_MASK_SZ		1
 #define TMR_CTRL_STATUS_SZ		1
 
-static uint32_t freq;
+static char cntpnsirq_connected;
+static char enabled;
 
 static void timer_reg_write(enum timer_reg r, uint32_t v)
 {
@@ -86,55 +73,56 @@ static uint32_t timer_reg_read(enum timer_reg r)
 	return v;
 }
 
-static void timer_disable()
+uint32_t timer_freq()
 {
-	uint32_t v;
-
-	v = timer_reg_read(TMR_CTRL);
-	v &= ~1;
-	timer_reg_write(TMR_CTRL, v);
+	return timer_reg_read(TMR_FREQ);
 }
 
-static void timer_enable()
+void timer_disable()
 {
 	uint32_t v;
 
-	v = timer_reg_read(TMR_CTRL);
-	v |= 1;
-	timer_reg_write(TMR_CTRL, v);
-}
-
-static int timer_irq(void *data)
-{
-	int ret;
-	uint32_t v;
-
-	data = data;
-
-	ret = IRQH_RET_NONE;
-	v = timer_reg_read(TMR_CTRL);
-	if (BF_GET(v, TMR_CTRL_STATUS)) {
-		/* Re-arm the timer. */
-		timer_reg_write(TMR_TVAL, freq);
-		ret = IRQH_RET_HANDLED;
+	if (enabled) {
+		v = timer_reg_read(TMR_CTRL);
+		v &= ~1;
+		timer_reg_write(TMR_CTRL, v);
+		enabled = 0;
 	}
-	return ret;
 }
 
-void timer_init()
+void timer_enable()
 {
+	uint32_t v;
 	volatile uint32_t *ctl;
-
-	timer_disable();
-
-	irq_insert(IRQ_DEV_TIMER, timer_irq, NULL);
 
 	/* QA7_rev3.4.
 	 * Connect the cntpnsirq to the CPU IRQ interrupt. */
-	ctl = (volatile uint32_t *)(ctrl_base + 0x40);
-	*ctl |= 1 << 1;
+	if (cntpnsirq_connected == 0) {
+		ctl = (volatile uint32_t *)(ctrl_base + 0x40);
+		*ctl |= 1 << 1;
+		cntpnsirq_connected = 1;
+	}
 
-	freq = timer_reg_read(TMR_FREQ);
+	if (enabled == 0) {
+		v = timer_reg_read(TMR_CTRL);
+		v |= 1;
+		timer_reg_write(TMR_CTRL, v);
+		enabled = 1;
+	}
+}
+
+char timer_is_asserted()
+{
+	uint32_t v;
+
+	v = timer_reg_read(TMR_CTRL);
+	if (BF_GET(v, TMR_CTRL_STATUS))
+		return 1;
+	else
+		return 0;
+}
+
+void timer_rearm(uint32_t freq)
+{
 	timer_reg_write(TMR_TVAL, freq);
-	timer_enable();
 }
