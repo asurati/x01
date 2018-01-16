@@ -43,7 +43,7 @@ QFLAGS := -m 256 -M raspi2 -kernel $(BIN) -serial stdio \
 
 LDFLAGS := -n -T pi.ld -defsym LOAD_PA=$(LOAD_PA)
 CFLAGS := -c -mcpu=arm1176jzf-s -ffreestanding -nostdlib -O3 -Wall -Wextra \
-	  -Werror -I ./include/ -fno-common -D$(BOARD) -g
+	  -Werror -I ./include/ -fno-common -D$(BOARD) -g -mabi=aapcs
 AFLAGS := -mcpu=arm1176jzf-s
 
 OBJS := start.o boot.o main.o mmu.o bdy.o pm.o atomic.o slub.o
