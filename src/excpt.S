@@ -30,44 +30,99 @@ excpt_vector:
 	ldr	pc, excpt_fiq_addr
 
 excpt_reset_addr:
-	.long excpt_reset
+	.word excpt_reset
 excpt_undef_addr:
-	.long excpt_undef
+	.word excpt_undef
 excpt_svc_addr:
-	.long excpt_svc
+	.word excpt_svc
 excpt_pabort_addr:
-	.long excpt_pabort
+	.word excpt_pabort
 excpt_dabort_addr:
-	.long excpt_dabort
+	.word excpt_dabort
 excpt_res_addr:
-	.long excpt_res
+	.word excpt_res
 excpt_fiq_addr:
-	.long excpt_fiq
+	.word excpt_fiq
 
+
+/* Keep sp_irq 8-byte aligned. */
 excpt_irq_addr:
 	sub	lr, lr, #4		@ Adjust the return address.
 	push	{r0-r3, r12, lr}	@ Save aapcs regs and lr.
+
+	bl	excpt_irq_enter
+
 	bl	excpt_irq		@ IRQ handler.
+
+	/* If the IRQ depth is > 1, do not process soft irqs here. */
+	ldr	r1, =irq_depth
+	ldr	r1, [r1]
+	cmp	r1, #1
+	bgt	no_irq_soft
+
+	/* The IRQ depth is 1. If the handlers raised soft irqs,
+	 * process them.
+	 */
 	and	r0, r0, #(1 << 1)	@ IRQH_RET_SOFT
 	beq	no_irq_soft
 
 	mrs	r0, spsr
 	push	{r0}			@ Save spsr_irq
+	sub	sp, sp, #4		@ Realign
 
+	/* sp_sys is assumed to be 8-byte aligned.*/
 	cps	#31			@ Switch to SYS mode.
-	and 	r0, sp, #4		@ Align sp_sys to 8-byte boundary.
-	sub	sp, sp, r0
-	push	{r0, lr}		@ Save the alignment and lr_usr.
+	push	{lr}			@ Save lr_usr.
+	sub	sp, sp, #4		@ Realign
 
 	bl	excpt_irq_soft
 
-	pop	{r0, lr}		@ Undo
-	add	sp, sp, r0
+	add	sp, sp, #4		@ Undo
+	pop	{lr}
 	cps	#18			@ Back to IRQ mode
 
+	add	sp, sp, #4
 	pop	{r0}
 	msr	spsr, r0
 
-no_irq_soft:
+	bl	excpt_irq_exit
+
+	/* This is the point where IRQs are disabled,
+	 * all soft IRQs have been processed, IRQ depth is 0,
+	 * and IRQ stack contains r0-r3, r12 and lr.
+	 *
+	 * Switch threads here, if required.
+	 *
+	 * srsdb the spsr_irq and lr_irq registers into sp_svc.
+	 * Change the mode to SVC.
+	 * Push all registers.
+	 * Change the sp_svc to the next task.
+	 * Pop all registers.
+	 * Change the mode to IRQ.
+	 * Load spsr_irq and lr_irq.
+	 * Return from IRQ.
+	 */
 	pop	{r0-r3, r12, lr}
 	movs	pc, lr
+
+no_irq_soft:
+	bl	excpt_irq_exit
+	pop	{r0-r3, r12, lr}
+	movs	pc, lr
+
+excpt_irq_enter:
+	ldr	r0, =irq_depth		@ Increment the IRQ depth
+	ldr	r1, [r0]
+	add	r1, r1, #1
+	str	r1, [r0]
+	bx	lr
+
+excpt_irq_exit:
+	ldr	r0, =irq_depth		@ Decrement the IRQ depth
+	ldr	r1, [r0]
+	sub	r1, r1, #1
+	str	r1, [r0]
+	bx	lr
+
+.section .bss
+irq_depth:	.word 0
