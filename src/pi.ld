@@ -65,6 +65,8 @@ SECTIONS
 		. = ALIGN(0x10);
 		. += 0x100;
 		irq_stack_hi = .;
+		. += 0x100;
+		sys_stack_hi = .;
 		bss_end = .;
 	}
 
