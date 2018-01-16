@@ -23,6 +23,12 @@ start:
 	/* Set IRQ stack. */
 	ldr	sp, =irq_stack_hi
 
+	/* Enter SYS mode. */
+	cps	#31
+
+	/* Set SYS stack. */
+	ldr	sp, =sys_stack_hi
+
 	/* Enter SVC mode. */
 	cps	#19
 
