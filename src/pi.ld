@@ -62,6 +62,9 @@ SECTIONS
 		. += 0x2000;
 
 		*(.bss);
+		. = ALIGN(0x10);
+		. += 0x100;
+		irq_stack_hi = .;
 		bss_end = .;
 	}
 
@@ -86,7 +89,12 @@ SECTIONS
 		ptab_end = .;
 	}
 
-	/* The below allocations are purely VA allocations. */
+	. = ALIGN(0x1000);
+	excpt_start_pa = . - KMODE_VA;
+
+	/* The below allocations are purely VA allocations,
+	 * except the exception vector.
+	 */
 
 	. = ASSERT(. < (KMODE_VA + 0x800000), "kernel too big.");
 
@@ -113,5 +121,9 @@ SECTIONS
 
 	/* High Vectors. */
 	. = 0xffff0000;
-	vm_vec_start = .;
+	excpt_start = .;
+	.excpt : AT (excpt_start_pa) {
+		excpt.o(.excpt);
+	}
+
 }

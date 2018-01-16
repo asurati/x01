@@ -15,31 +15,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-.align 2
-.globl irq_vector
-irq_vector:
-	ldr	pc, irq_vec_reset_addr
-	ldr	pc, irq_vec_undef_addr
-	ldr	pc, irq_vec_svc_addr
-	ldr	pc, irq_vec_pabort_addr
-	ldr	pc, irq_vec_dabort_addr
-	ldr	pc, irq_vec_res_addr
-	ldr	pc, irq_vec_irq_addr
-	ldr	pc, irq_vec_fiq_addr
+#ifndef _EXCPT_H_
+#define _EXCPT_H_
 
-irq_vec_reset_addr:
-	.long irq_vec_reset
-irq_vec_undef_addr:
-	.long irq_vec_undef
-irq_vec_svc_addr:
-	.long irq_vec_svc
-irq_vec_pabort_addr:
-	.long irq_vec_pabort
-irq_vec_dabort_addr:
-	.long irq_vec_dabort
-irq_vec_res_addr:
-	.long irq_vec_res
-irq_vec_irq_addr:
-	.long irq_vec_irq
-irq_vec_fiq_addr:
-	.long irq_vec_fiq
+void	excpt_init();
+#endif
