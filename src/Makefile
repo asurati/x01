@@ -47,8 +47,14 @@ CFLAGS := -c -mcpu=arm1176jzf-s -ffreestanding -nostdlib -O3 -Wall -Wextra \
 AFLAGS := -mcpu=arm1176jzf-s
 
 OBJS := start.o boot.o main.o mmu.o bdy.o pm.o atomic.o slub.o
-OBJS += list.o vm.o io.o excpt.o excptc.o irq.o timer.o
+OBJS += list.o vm.o io.o excpt.o excptc.o irq.o
 OBJS += lib/string.o lib/assert.o
+
+ifeq ($(BOARD),QRPI2)
+	OBJS += timer_qrpi2.o
+else
+	OBJS += timer_rpi1.o
+endif
 
 IMG_ENTRY = 0x$(shell xxd -l 4 -s 0x18 -e $(ELF) | cut -c11-18)
 

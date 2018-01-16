@@ -34,45 +34,11 @@
 
 static int timer_irq(void *data)
 {
-	uint32_t v;
 	data = data;
-	asm volatile("mrc	p15, 0, %0, c14, c2, 1"
-		     : "=r" (v));
-	v &= ~1;
-	asm volatile("mcr	p15, 0, %0, c14, c2, 1"
-		     : : "r" (v));
 	return 0;
 }
 
-#ifdef QRPI2
-void timer_init()
-{
-	uint32_t cntdn;
-	volatile uint32_t *ctl;
-
-	irq_insert(IRQ_DEV_TIMER, timer_irq, NULL);
-
-	/* QA7_rev3.4.
-	 * Connect the cntpnsirq to the CPU IRQ interrupt. */
-	ctl = (volatile uint32_t *)(ctrl_base + 0x40);
-	*ctl |= 1 << 1;
-
-	cntdn = 62500000;
-
-	/* cntp_tval. */
-	asm volatile("mcr	p15, 0, %0, c14, c2, 0"
-		     : : "r" (cntdn));
-
-	/* cntp_ctl. */
-	asm volatile("mrc	p15, 0, %0, c14, c2, 1"
-		     : "=r" (cntdn));
-	cntdn |= 1;
-	asm volatile("mcr	p15, 0, %0, c14, c2, 1"
-		     : : "r" (cntdn));
-}
-#else
 void timer_init()
 {
 	irq_insert(IRQ_DEV_TIMER, timer_irq, NULL);
 }
-#endif
