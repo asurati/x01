@@ -20,6 +20,7 @@
 #include <slub.h>
 #include <vm.h>
 #include <io.h>
+#include <excpt.h>
 #include <irq.h>
 #include <timer.h>
 
@@ -48,6 +49,7 @@ void kmain(const void *al)
 	slub_init();
 	vm_init();
 	io_init();
+	excpt_init();
 	irq_init();
 	timer_init();
 

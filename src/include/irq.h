@@ -18,5 +18,16 @@
 #ifndef _IRQ_H_
 #define _IRQ_H_
 
+#include <types.h>
+
+enum irq_dev {
+	IRQ_DEV_TIMER,
+	IRQ_DEV_MAX
+};
+
+typedef int (*irq_fn)(void *data);
+
 void	irq_init();
+int	irq_insert(enum irq_dev dev, irq_fn fn, void *data);
+void	irq_soft_raise(enum irq_dev dev);
 #endif

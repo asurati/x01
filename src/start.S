@@ -17,10 +17,16 @@
 
 .globl start
 start:
-	/* Disable IRQs and FIQs. Enter SVC mode. */
-	cpsid	if, #19
+	/* Disable IRQs and FIQs. Enter IRQ mode. */
+	cpsid	if, #18
 
-	/* Set stack. */
+	/* Set IRQ stack. */
+	ldr	sp, =irq_stack_hi
+
+	/* Enter SVC mode. */
+	cps	#19
+
+	/* Set SVC stack. */
 	ldr	sp, =stack_hi_pa
 
 	/* Save the pointer to the atag list. */

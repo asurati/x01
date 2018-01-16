@@ -16,75 +16,63 @@
  */
 
 #include <assert.h>
+#include <atomic.h>
 #include <mmu.h>
 #include <pm.h>
+#include <slub.h>
 #include <string.h>
+#include <io.h>
 #include <irq.h>
 
-extern char vm_vec_start;
-static const void *vec_base = &vm_vec_start;
-static void loop()
+struct irq {
+	irq_fn fn;
+	void *data;
+};
+
+static int irq_count;
+static struct irq irq_devs[IRQ_DEV_MAX];
+static struct atomic irq_soft;
+
+/* irq_enter, irq_exit and excpt_irq called with IRQs disabled. */
+
+void irq_enter()
 {
-	while (1)
-		asm volatile("wfi");
+	++irq_count;
+	assert(irq_count > 0);
 }
 
-void irq_vec_reset() {loop();}
-void irq_vec_undef() {loop();}
-void irq_vec_svc() {loop();}
-void irq_vec_pabort() {loop();}
-void irq_vec_dabort() {loop();}
-void irq_vec_res() {loop();}
-void irq_vec_irq() {loop();}
-void irq_vec_fiq() {loop();}
+void irq_exit()
+{
+	--irq_count;
+	assert(irq_count >= 0);
+}
+
+void excpt_irq()
+{
+	int i;
+	for (i = 0; i < IRQ_DEV_MAX; ++i)
+		irq_devs[i].fn(irq_devs[i].data);
+}
 
 void irq_init()
 {
-	int ret;
-	uintptr_t pa;
-	struct mmu_map_req r;
-	extern char irq_vector;
+	irq_count = 0;
+	/* Enable IRQs within CPSR. */
+	asm volatile("cpsie i");
+}
 
-	ret = pm_ram_alloc(PM_UNIT_PAGE, PGF_USE_NORMAL, 1, &pa);
-	assert(ret == 0);
+int irq_insert(enum irq_dev dev, irq_fn fn, void *data)
+{
+	assert(dev < IRQ_DEV_MAX);
+	assert(irq_devs[dev].fn == NULL);
 
-	r.va_start = (void *)vec_base;
-	r.pa_start = pa;
-	r.n = 1;
-	r.mt = MT_NRM_WBA;
-	r.ap = AP_SRW;
-	r.mu = MAP_UNIT_PAGE;
-	r.exec = 0;
-	r.global = 1;
-	r.shared = 0;
-	r.domain = 0;
+	irq_devs[dev].fn = fn;
+	irq_devs[dev].data = data;
 
-	ret = mmu_map(NULL, &r);
-	assert(ret == 0);
+	return 0;
+}
 
-	memcpy(r.va_start, &irq_vector, 16 * 4);
-
-	/* The writes must be cleaned to a point visible to
-	 * instruction fetch, which is usually L2 or RAM.
-	 */
-	mmu_dcache_clean(r.va_start, 16 * 4);
-
-	ret = mmu_unmap(NULL, &r);
-	assert(ret == 0);
-
-	/* Invalidate the TLB entries since the page will be
-	 * remapped with different parameters.
-	 */
-	mmu_tlb_invalidate(r.va_start, 16 * 4);
-
-	r.ap = AP_SRO;
-	r.exec = 1;
-
-	ret = mmu_map(NULL, &r);
-	assert(ret == 0);
-
-	/* TODO Drain pipeline. */
-
-	/* Enable IRQs and FIQs within CPSR. */
-	asm volatile("cpsie if");
+void irq_soft_raise(enum irq_dev dev)
+{
+	atomic_set(&irq_soft, 1 << dev);
 }
