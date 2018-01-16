@@ -23,7 +23,7 @@ struct irq {
 	void *data;
 };
 
-static char irq_soft_count;
+static int irq_soft_depth;
 static struct irq irq_devs[IRQ_DEV_MAX];
 static uint32_t irq_soft_mask;
 
@@ -32,18 +32,18 @@ int excpt_irq_soft()
 	/* If another instance of the function is running,
 	 * return.
 	 */
-	if (irq_soft_count)
+	if (irq_soft_depth)
 		return 0;
 
 	/* Without the "memory" barrier, the compiler optimizes
-	 * away the inc/dec of irq_soft_count, since it can prove
-	 * that the count remains unchanged within the function.
+	 * away the inc/dec of irq_soft_depth, since it can prove
+	 * that the value remains unchanged within the function.
 	 */
-	irq_soft_count = 1;
+	++irq_soft_depth;
 	asm volatile("cpsie i" : : : "memory", "cc");
 
 	asm volatile("cpsid i" : : : "memory", "cc");
-	irq_soft_count = 0;
+	--irq_soft_depth;
 	return 0;
 }
 
@@ -58,7 +58,7 @@ int excpt_irq()
 
 void irq_init()
 {
-	irq_soft_count = 0;
+	irq_soft_depth = 0;
 	irq_soft_mask = 0;
 
 	/* Enable IRQs within CPSR. */
