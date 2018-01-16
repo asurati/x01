@@ -31,7 +31,6 @@ DD := dd
 MK := mkimage
 
 ELF := pi.elf
-TBIN := pi.tmp.bin
 BIN := pi.bin
 GZBIN := $(BIN).gz
 HWIMG := hw.img
@@ -80,7 +79,7 @@ $(ELF): $(OBJS)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -f $(BIN) $(TBIN) $(GZBIN) $(ELF) $(HWIMG) $(SWIMG) $(OBJS)
+	rm -f $(BIN) $(GZBIN) $(ELF) $(HWIMG) $(SWIMG) $(OBJS)
 
 rundbg:
 	$(QEMU) $(QFLAGS) -s -S
