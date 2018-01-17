@@ -236,8 +236,8 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 				assert(ALIGNED((uintptr_t)tr.va_start,
 					       PAGE_SIZE));
 
-				ret = pm_ram_alloc(PM_UNIT_PAGE, 1,
-						   PGF_USE_NORMAL,
+				ret = pm_ram_alloc(PM_UNIT_PAGE,
+						   PGF_USE_NORMAL, 1,
 						   &tr.pa_start);
 				assert(ret == 0);
 
@@ -267,7 +267,7 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 			te = 0;
 			if (r->mu == MAP_UNIT_LARGE_PAGE) {
 				BF_SET(te, PTE_TYPE, 1);
-				BF_PUSH(de, PTE_LP_BASE, pa);
+				BF_PUSH(te, PTE_LP_BASE, pa);
 				if (!r->exec)
 					BF_SET(te, PTE_LP_XN, 1);
 				BF_SET(te, PTE_LP_TEX, (r->mt >> 2) & 7);
