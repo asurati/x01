@@ -80,7 +80,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 	mapsz = ALIGN_UP(npfns * sizeof(struct page), PAGE_SIZE);
 	assert(mapsz == 256 * 1024);
 
-	ret = _pm_ram_alloc(PM_UNIT_64KB, 4, pa);
+	ret = _pm_ram_alloc(PM_UNIT_LARGE_PAGE, 4, pa);
 	assert(ret == 0);
 
 	r.n = 1;
@@ -142,6 +142,7 @@ static int _pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa)
 	int i, ret, pos;
 	assert(unit < PM_UNIT_MAX);
 
+	ret = -1;
 	for (i = 0; i < n; ++i) {
 		ret = bdy_alloc(&bdy_ram, unit, &pos);
 		if (ret)
