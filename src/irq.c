@@ -23,7 +23,6 @@ struct irq {
 	void *data;
 };
 
-static int irq_soft_depth;
 static struct irq irqs_hard[IRQ_HARD_MAX];
 static struct irq irqs_soft[IRQ_SOFT_MAX];
 
@@ -36,11 +35,6 @@ int excpt_irq_soft()
 {
 	int i;
 	uint32_t mask;
-	/* If another instance of the function is running,
-	 * return.
-	 */
-	if (irq_soft_depth)
-		return 0;
 
 	while (irq_soft_mask) {
 		mask = irq_soft_mask;
@@ -50,8 +44,7 @@ int excpt_irq_soft()
 		 * away the inc/dec of irq_soft_depth, since it can prove
 		 * that the value remains unchanged within the function.
 		 */
-		++irq_soft_depth;
-		asm volatile("cpsie i" : : : "memory", "cc");
+		irq_enable();
 
 		for (i = 0; i < IRQ_SOFT_MAX && mask; ++i) {
 			if ((mask & (1 << i)) == 0)
@@ -60,8 +53,7 @@ int excpt_irq_soft()
 			irqs_soft[i].fn(irqs_soft[i].data);
 		}
 
-		asm volatile("cpsid i" : : : "memory", "cc");
-		--irq_soft_depth;
+		irq_disable();
 	}
 	return 0;
 }
@@ -77,7 +69,6 @@ int excpt_irq()
 
 void irq_init()
 {
-	irq_soft_depth = 0;
 	irq_soft_mask = 0;
 
 	irq_enable();
