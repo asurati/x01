@@ -85,10 +85,8 @@ excpt_irq_addr:
 	pop	{r0}
 	msr	spsr, r0
 
-	bl	excpt_irq_exit
-
 	/* This is the point where IRQs are disabled,
-	 * all soft IRQs have been processed, IRQ depth is 0,
+	 * all soft IRQs have been processed, IRQ depth is 1,
 	 * and IRQ stack contains r0-r3, r12 and lr.
 	 *
 	 * Switch threads here, if required.
@@ -111,6 +109,8 @@ excpt_irq_addr:
 	beq	no_irq_soft
 
 	/* The thread must be evicted off the CPU. */
+
+	bl	excpt_irq_exit
 
 	/* Clear the IRQ stack. */
 	pop	{r0-r3, r12, lr}
