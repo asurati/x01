@@ -82,7 +82,6 @@ static struct list_head subpage_none_heads[SLUB_SUBPAGE_NSIZES];
  * p[0]. The struct slab for each of the 9 sizes are allocated
  * from p[1], the 16 byte slab.
  */
-
 void slub_init()
 {
 	int i, j, n, ret, shft;
@@ -217,8 +216,6 @@ void *kmalloc(size_t sz)
 	e = NULL;
 	if (list_empty(h))
 		h = &subpage_none_heads[i];
-	else
-		e = h->next;
 
 	if (list_empty(h)) {
 		/* If we are unable to find any free item, the size
