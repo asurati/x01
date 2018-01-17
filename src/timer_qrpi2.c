@@ -35,7 +35,7 @@ enum timer_reg {
 static char cntpnsirq_connected;
 static char enabled;
 
-static void timer_reg_write(enum timer_reg r, uint32_t v)
+static void timer_reg_write(uint32_t v, enum timer_reg r)
 {
 	assert(r < TMR_MAX);
 	switch (r) {
@@ -85,7 +85,7 @@ void timer_disable()
 	if (enabled) {
 		v = timer_reg_read(TMR_CTRL);
 		v &= ~1;
-		timer_reg_write(TMR_CTRL, v);
+		timer_reg_write(v, TMR_CTRL);
 		enabled = 0;
 	}
 }
@@ -93,20 +93,20 @@ void timer_disable()
 void timer_enable()
 {
 	uint32_t v;
-	volatile uint32_t *ctl;
 
 	/* QA7_rev3.4.
 	 * Connect the cntpnsirq to the CPU IRQ interrupt. */
 	if (cntpnsirq_connected == 0) {
-		ctl = (volatile uint32_t *)(ctrl_base + 0x40);
-		*ctl |= 1 << 1;
+		v = readl(ctrl_base + 0x40);
+		v |= 1 << 1;
+		writel(v, ctrl_base + 0x40);
 		cntpnsirq_connected = 1;
 	}
 
 	if (enabled == 0) {
 		v = timer_reg_read(TMR_CTRL);
 		v |= 1;
-		timer_reg_write(TMR_CTRL, v);
+		timer_reg_write(v, TMR_CTRL);
 		enabled = 1;
 	}
 }
@@ -124,5 +124,5 @@ char timer_is_asserted()
 
 void timer_rearm(uint32_t freq)
 {
-	timer_reg_write(TMR_TVAL, freq);
+	timer_reg_write(freq, TMR_TVAL);
 }
