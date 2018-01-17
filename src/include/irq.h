@@ -18,7 +18,9 @@
 #ifndef _IRQ_H_
 #define _IRQ_H_
 
+#include <barrier.h>
 #include <types.h>
+
 
 enum irq_hard {
 	IRQ_HARD_TIMER,
@@ -30,14 +32,22 @@ enum irq_soft {
 	IRQ_SOFT_MAX
 };
 
+/* Since IRQ enable/disable are used for synchronization,
+ * rovide memory ordering.
+ *
+ * IRQ disable acts as an acquire barrier (or better),
+ * while IRQ enable as a release barrier (or better).
+ */
 static inline void irq_enable()
 {
+	dmb();
 	asm volatile("cpsie i" : : : "cc");
 }
 
 static inline void irq_disable()
 {
 	asm volatile("cpsid i" : : : "cc");
+	dmb();
 }
 
 #define IRQH_RET_NONE		0
