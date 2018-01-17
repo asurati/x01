@@ -19,19 +19,30 @@
 #define _IO_H_
 
 /* 1MB device memory mapped at io_base. */
-extern volatile const void *io_base;
+extern volatile void * const io_base;
 
 #ifdef QRPI2
 
 #define IO_BASE_PA	0x3f000000
 #define CTRL_BASE_PA	0x40000000
-extern volatile const void *ctrl_base;
+extern volatile void * const ctrl_base;
 
 #else /* QRPI2 */
 
 #define IO_BASE_PA	0x20000000
 
 #endif /* QRPI2 */
+
+static inline uint32_t readl(const volatile void *addr)
+{
+	return *(const volatile uint32_t *)addr;
+}
+
+static inline void writel(uint32_t val, volatile void *addr)
+{
+	*(volatile uint32_t *)addr = val;
+
+}
 
 void	io_init();
 #endif
