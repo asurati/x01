@@ -53,8 +53,8 @@ void kmain(const void *al)
 	io_init();
 	excpt_init();
 	irq_init();
-	timer_init();
 	sched_init();
+	timer_init();
 	sched_thread_create(thr0, (void *)0xdeaddead);
 
 	while (1)
