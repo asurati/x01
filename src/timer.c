@@ -16,6 +16,7 @@
  */
 
 #include <irq.h>
+#include <sched.h>
 
 /* Internal API for timer implementation. */
 char		timer_is_asserted();
@@ -37,7 +38,9 @@ uint32_t	timer_freq();
  */
 
 static uint32_t freq;
+static int ticks;
 
+/* Runs with IRQs disabled. */
 static int timer_irq(void *data)
 {
 	int ret;
@@ -46,17 +49,47 @@ static int timer_irq(void *data)
 
 	ret = IRQH_RET_NONE;
 	if (timer_is_asserted()) {
+		/* Accumulate ticks since the last run of timer's
+		 * soft irq. Races with the updates made by
+		 * the soft irq routine.
+		 */
+		++ticks;
+		irq_soft_raise(IRQ_SOFT_TIMER);
+
 		timer_rearm(freq);
-		ret = IRQH_RET_HANDLED;
+		ret = IRQH_RET_HANDLED | IRQH_RET_SOFT;
 	}
 	return ret;
 }
 
+/* Runs with IRQs enabled. */
+static int timer_irq_soft(void *data)
+{
+	int lt;
+
+	data = data;
+
+	/* These changes race with the updates made by the IRQ.
+	 * Disable the IRQ (this is UP) before changing.
+	 */
+	irq_disable();
+	lt = ticks;
+	ticks = 0;
+	irq_soft_clear(IRQ_SOFT_TIMER);
+	irq_enable();
+
+	sched_timer_tick(lt);
+	return 0;
+}
+
 void timer_init()
 {
+	ticks = 0;
+
 	timer_disable();
 
-	irq_insert(IRQ_DEV_TIMER, timer_irq, NULL);
+	irq_insert(IRQ_HARD_TIMER, timer_irq, NULL);
+	irq_soft_insert(IRQ_SOFT_TIMER, timer_irq_soft, NULL);
 
 	freq = timer_freq();
 	timer_rearm(freq);

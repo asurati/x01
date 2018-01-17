@@ -24,26 +24,45 @@ struct irq {
 };
 
 static int irq_soft_depth;
-static struct irq irq_devs[IRQ_DEV_MAX];
-static uint32_t irq_soft_mask;
+static struct irq irqs_hard[IRQ_HARD_MAX];
+static struct irq irqs_soft[IRQ_SOFT_MAX];
+
+/* Force volatile, since the mask can be changed
+ * through IRQs while runnng excpt_irq_soft
+ */
+static volatile uint32_t irq_soft_mask;
 
 int excpt_irq_soft()
 {
+	int i;
+	uint32_t mask;
 	/* If another instance of the function is running,
 	 * return.
 	 */
 	if (irq_soft_depth)
 		return 0;
 
-	/* Without the "memory" barrier, the compiler optimizes
-	 * away the inc/dec of irq_soft_depth, since it can prove
-	 * that the value remains unchanged within the function.
-	 */
-	++irq_soft_depth;
-	asm volatile("cpsie i" : : : "memory", "cc");
+	while (irq_soft_mask) {
+		mask = irq_soft_mask;
+		irq_soft_mask = 0;
 
-	asm volatile("cpsid i" : : : "memory", "cc");
-	--irq_soft_depth;
+		/* Without the "memory" barrier, the compiler optimizes
+		 * away the inc/dec of irq_soft_depth, since it can prove
+		 * that the value remains unchanged within the function.
+		 */
+		++irq_soft_depth;
+		asm volatile("cpsie i" : : : "memory", "cc");
+
+		for (i = 0; i < IRQ_SOFT_MAX && mask; ++i) {
+			if ((mask & (1 << i)) == 0)
+				continue;
+			mask &= ~(1 << i);
+			irqs_soft[i].fn(irqs_soft[i].data);
+		}
+
+		asm volatile("cpsid i" : : : "memory", "cc");
+		--irq_soft_depth;
+	}
 	return 0;
 }
 
@@ -51,8 +70,8 @@ int excpt_irq()
 {
 	int i, ret;
 	ret = 0;
-	for (i = 0; i < IRQ_DEV_MAX; ++i)
-		ret |= irq_devs[i].fn(irq_devs[i].data);
+	for (i = 0; i < IRQ_HARD_MAX; ++i)
+		ret |= irqs_hard[i].fn(irqs_hard[i].data);
 	return ret;
 }
 
@@ -61,25 +80,37 @@ void irq_init()
 	irq_soft_depth = 0;
 	irq_soft_mask = 0;
 
-	/* Enable IRQs within CPSR. */
-	asm volatile("cpsie i" : : : "cc");
+	irq_enable();
 }
 
-int irq_insert(enum irq_dev dev, irq_fn fn, void *data)
+int irq_insert(enum irq_hard ih, irq_fn fn, void *data)
 {
-	assert(dev < IRQ_DEV_MAX);
-	assert(irq_devs[dev].fn == NULL);
+	assert(ih < IRQ_HARD_MAX);
+	assert(irqs_hard[ih].fn == NULL);
 
-	irq_devs[dev].fn = fn;
-	irq_devs[dev].data = data;
+	irqs_hard[ih].fn = fn;
+	irqs_hard[ih].data = data;
 
 	return 0;
 }
 
-/* SoftIRQs are raised and dropped while the hardIRQs
- * are disabled. Atomic unncessary.
- */
-void irq_soft_raise(enum irq_dev dev)
+int irq_soft_insert(enum irq_soft is, irq_fn fn, void *data)
 {
-	irq_soft_mask |= 1 << dev;
+	assert(is < IRQ_SOFT_MAX);
+	assert(irqs_soft[is].fn == NULL);
+
+	irqs_soft[is].fn = fn;
+	irqs_soft[is].data = data;
+
+	return 0;
+}
+
+void irq_soft_raise(enum irq_soft is)
+{
+	irq_soft_mask |= 1 << is;
+}
+
+void irq_soft_clear(enum irq_soft is)
+{
+	irq_soft_mask &= ~(1 << is);
 }

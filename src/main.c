@@ -23,7 +23,9 @@
 #include <excpt.h>
 #include <irq.h>
 #include <timer.h>
+#include <sched.h>
 
+int thr0(void *p);
 void kmain(const void *al)
 {
 	uint32_t ram, ramsz;
@@ -52,8 +54,18 @@ void kmain(const void *al)
 	excpt_init();
 	irq_init();
 	timer_init();
+	sched_init();
+	sched_thread_create(thr0, (void *)0xdeaddead);
 
 	while (1)
 		asm volatile("wfi");
+}
+
+int thr0(void *p)
+{
+	p = p;
+	while (1)
+		asm volatile("wfi");
+	return 0;
 }
 

@@ -21,6 +21,7 @@
 #include <slub.h>
 #include <string.h>
 #include <list.h>
+#include <vm.h>
 
 #define SLUB_NSIZES		24
 #define SLUB_SUBPAGE_NSIZES	 9
@@ -191,6 +192,38 @@ static struct slab *slub_alloc_slab(int ix)
 	return s;
 }
 
+void *kmalloc_page(int ix)
+{
+	int ret;
+	void *p;
+	uintptr_t pa;
+	struct mmu_map_req r;
+	/* For now, only allocate single page. */
+	assert(ix == 9);
+
+	ret = vm_alloc(VMA_SLUB, VM_UNIT_PAGE, 1, &p);
+	assert(ret == 0);
+
+	ret = pm_ram_alloc(PM_UNIT_PAGE, PGF_USE_SLUB, 1, &pa);
+	assert(ret == 0);
+
+	r.va_start = p;
+	r.pa_start = pa;
+	r.n = 1;
+	r.mt = MT_NRM_WBA;
+	r.ap = AP_SRW;
+	r.mu = MAP_UNIT_PAGE;
+	r.exec = 0;
+	r.global = 1;
+	r.shared = 0;
+	r.domain = 0;
+
+	ret = mmu_map(NULL, &r);
+	assert(ret == 0);
+
+	return p;
+}
+
 void *kmalloc(size_t sz)
 {
 	int i, n, shft;
@@ -206,7 +239,8 @@ void *kmalloc(size_t sz)
 		if (slub_alloc_sizes[i] >= sz)
 			break;
 
-	assert(i < SLUB_SUBPAGE_NSIZES);
+	if (i >= SLUB_SUBPAGE_NSIZES)
+		return kmalloc_page(i);
 
 	/* subpage allocations. */
 

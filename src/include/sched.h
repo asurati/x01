@@ -15,40 +15,31 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _IRQ_H_
-#define _IRQ_H_
+#ifndef _SCHED_H_
+#define _SCHED_H_
 
-#include <types.h>
+#include <list.h>
 
-enum irq_hard {
-	IRQ_HARD_TIMER,
-	IRQ_HARD_MAX
+#define THRD_STATE_RUNNING		1
+#define THRD_STATE_EVICTING		2
+#define THRD_STATE_READY		3
+
+#define THRD_QUOTA			5
+
+struct thread {
+	struct list_head entry;
+	void *usr_stack_hi;
+	void *svc_stack_hi;
+	void *context;
+	char quota;
+	char ticks;
+	char preemptible;
+	char state;
 };
 
-enum irq_soft {
-	IRQ_SOFT_TIMER,
-	IRQ_SOFT_MAX
-};
+typedef int (*thread_fn)(void *p);
 
-static inline void irq_enable()
-{
-	asm volatile("cpsie i" : : : "cc");
-}
-
-static inline void irq_disable()
-{
-	asm volatile("cpsid i" : : : "cc");
-}
-
-#define IRQH_RET_NONE		0
-#define IRQH_RET_HANDLED	(1 << 0)
-#define IRQH_RET_SOFT		(1 << 1)
-
-typedef int (*irq_fn)(void *data);
-
-void	irq_init();
-int	irq_insert(enum irq_hard ih, irq_fn fn, void *data);
-int	irq_soft_insert(enum irq_soft is, irq_fn fn, void *data);
-void	irq_soft_raise(enum irq_soft is);
-void	irq_soft_clear(enum irq_soft is);
+void		sched_init();
+void		sched_timer_tick();
+struct thread	*sched_thread_create(thread_fn fn, void *p);
 #endif
