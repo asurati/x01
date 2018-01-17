@@ -17,20 +17,8 @@
 
 .globl start
 start:
-	/* Disable IRQs and FIQs. Enter IRQ mode. */
-	cpsid	if, #18
-
-	/* Set IRQ stack. */
-	ldr	sp, =irq_stack_hi
-
-	/* Enter SYS mode. */
-	cps	#31
-
-	/* Set SYS stack. */
-	ldr	sp, =sys_stack_hi
-
-	/* Enter SVC mode. */
-	cps	#19
+	/* Disable IRQs and FIQs. Enter SVC mode. */
+	cpsid	if, #19
 
 	/* Set SVC stack. */
 	ldr	sp, =stack_hi_pa

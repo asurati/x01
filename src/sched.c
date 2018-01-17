@@ -39,14 +39,22 @@ static struct thread *sched_next()
 	return NULL;
 }
 
-/* Runs with IRQs enabled, under the timer's soft IRQ. */
+/* Runs under the timer's soft IRQ. */
 void sched_timer_tick(int ticks)
 {
 	curr->ticks -= ticks;
 }
 
-/* Runs under IRQ mode with IRQs disabled. */
-char sched_needs_eviction()
+/* Runs under SVC mode with IRQs disabled. Does not race with
+ * sched_timer_tick. If sched_timer_tick is running, the irq depth
+ * has to be 1 (because that is where the soft IRQs run). If a
+ * timer IRQ arrives, the irq depth, being > 1, forbids another
+ * instance of soft IRQ handler from running.
+ *
+ * This and other functions do need to serialize access to the
+ * threads list.
+ */
+char sched_should_switch()
 {
 	/* THRD_STATE_EVICTING ==
 	 * Waiting for the switch routine to run. It runs
@@ -129,9 +137,13 @@ struct thread *sched_thread_create(thread_fn fn, void *data)
 	*p = 0x153;
 	--p;
 	*p = (uintptr_t)fn;
-	p -= 13;
-	*p = (uintptr_t)data;
 	--p;
+	*p = 0;
+
+	p -= 5;
+	*p = (uintptr_t)data;
+	p -= 8;
+
 	t->context = p;
 
 	/* r0 must be set to p.
