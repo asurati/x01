@@ -43,23 +43,20 @@ static int ticks;
 /* Runs with IRQs disabled. */
 static int timer_irq(void *data)
 {
-	int ret;
-
 	data = data;
 
-	ret = IRQH_RET_NONE;
-	if (timer_is_asserted()) {
-		/* Accumulate ticks since the last run of timer's
-		 * soft irq. Races with the updates made by
-		 * the soft irq routine.
-		 */
-		++ticks;
-		irq_soft_raise(IRQ_SOFT_TIMER);
+	if (!timer_is_asserted())
+		return IRQH_RET_NONE;
 
-		timer_rearm(freq);
-		ret = IRQH_RET_HANDLED | IRQH_RET_SOFT;
-	}
-	return ret;
+	/* Accumulate ticks since the last run of timer's
+	 * soft irq. Races with the updates made by
+	 * the soft irq routine.
+	 */
+	++ticks;
+	irq_soft_raise(IRQ_SOFT_TIMER);
+
+	timer_rearm(freq);
+	return IRQH_RET_HANDLED | IRQH_RET_SOFT;
 }
 
 /* Runs with IRQs enabled. */
