@@ -68,14 +68,8 @@ excpt_irq_addr:
 	 * process them.
 	 */
 	ands	r0, r0, #(1 << 1)	@ IRQH_RET_SOFT
-	bne	irq_soft
+	beq	irq_done
 
-irq_done:
-	bl excpt_irq_exit
-	pop	{r0-r3, r12, lr}
-	rfeia	sp!			@ Undo srsdb
-
-irq_soft:
 	bl	excpt_irq_soft
 
 	bl	sched_should_switch
@@ -87,7 +81,11 @@ irq_soft:
 	bl	swtch
 	mov	sp, r0
 	pop	{r4-r11}
-	b	irq_done
+
+irq_done:
+	bl excpt_irq_exit
+	pop	{r0-r3, r12, lr}
+	rfeia	sp!			@ Undo srsdb
 
 /* The context frame is saved on the stack as shown below.
  * [top] r4-r11,r0-r3, r12,lr_svc,lr_irq,spsr_irq [bottom]
