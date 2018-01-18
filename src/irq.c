@@ -85,8 +85,6 @@ int excpt_irq()
 void irq_init()
 {
 	irq_soft_mask = 0;
-
-	irq_enable();
 }
 
 int irq_insert(enum irq_hard ih, irq_fn fn, void *data)
