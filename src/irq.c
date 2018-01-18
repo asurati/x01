@@ -26,9 +26,6 @@ struct irq {
 static struct irq irqs_hard[IRQ_HARD_MAX];
 static struct irq irqs_soft[IRQ_SOFT_MAX];
 
-/* Force volatile, since the mask can be changed
- * through IRQs while runnng excpt_irq_soft
- */
 static volatile uint32_t irq_soft_mask;
 
 int excpt_irq_soft()
@@ -36,8 +33,15 @@ int excpt_irq_soft()
 	int i;
 	uint32_t mask;
 
-	while (irq_soft_mask) {
+	while (1) {
+		/* The store to the global mask must not be moved
+		 * into a region where the IRQs are enabled. Hence,
+		 * irq_enable() must provide release semantics.
+		 */
 		mask = irq_soft_mask;
+		if (!mask)
+			break;
+
 		irq_soft_mask = 0;
 
 		/* Without the "memory" barrier, the compiler optimizes
@@ -45,6 +49,13 @@ int excpt_irq_soft()
 		 * that the value remains unchanged within the function.
 		 */
 		irq_enable();
+
+		/* It is being assumed that number of instructions below
+		 * (before the IRQs are disabled again) is large enough to
+		 * allow taking pending interrupts. Else, isb() must
+		 * be inserted here to force the CPU to take any pending
+		 * interrupts.
+		 */
 
 		for (i = 0; i < IRQ_SOFT_MAX && mask; ++i) {
 			if ((mask & (1 << i)) == 0)
@@ -54,6 +65,10 @@ int excpt_irq_soft()
 		}
 
 		irq_disable();
+		/* The load of the global mask must not be moved
+		 * into a region where the IRQs are enabled. Hence,
+		 * irq_disable must provide acquire semantics.
+		 */
 	}
 	return 0;
 }
@@ -96,6 +111,15 @@ int irq_soft_insert(enum irq_soft is, irq_fn fn, void *data)
 	return 0;
 }
 
+/* If the compiler determines that the raise and clear calls
+ * can be optimized out (at the call site), events may be los.
+ * irq_soft_mask needs to be volatile to prevent that from
+ * occurring.
+ *
+ * Change orr/bic to add/sub, remove volatile and call
+ * raise and clear passing the same value as parameter.
+ * The compiler optimizes away the raise and clear.
+ */
 void irq_soft_raise(enum irq_soft is)
 {
 	irq_soft_mask |= 1 << is;

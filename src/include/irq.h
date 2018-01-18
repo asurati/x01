@@ -44,6 +44,10 @@ static inline void irq_enable()
 	asm volatile("cpsie i" : : : "cc");
 }
 
+/* CPSID is probably a hw read/write barrier. So dmb()
+ * is unnecessary. CPSIE probably does not implement
+ * any type of hw barrier.
+ */
 static inline void irq_disable()
 {
 	asm volatile("cpsid i" : : : "cc");
