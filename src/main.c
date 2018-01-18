@@ -20,10 +20,12 @@
 #include <slub.h>
 #include <vm.h>
 #include <io.h>
+#include <intc.h>
 #include <excpt.h>
 #include <irq.h>
 #include <timer.h>
 #include <sched.h>
+#include <mbox.h>
 
 int thr0(void *p);
 void kmain(const void *al)
@@ -52,10 +54,15 @@ void kmain(const void *al)
 	vm_init();
 	io_init();
 	excpt_init();
+	intc_init();
 	irq_init();
 	sched_init();
 	timer_init();
+	mbox_init();
 	sched_thread_create(thr0, (void *)0xdeaddead);
+
+	/* Enable IRQs once hard and soft IRQs are setup. */
+	irq_enable();
 
 	while (1)
 		asm volatile("wfi");

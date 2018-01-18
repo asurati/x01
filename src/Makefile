@@ -47,6 +47,7 @@ AFLAGS := -mcpu=arm1176jzf-s
 
 OBJS := start.o boot.o main.o mmu.o bdy.o pm.o atomic.o slub.o
 OBJS += list.o vm.o io.o excpt.o excptc.o irq.o timer.o sched.o
+OBJS += intc.o mbox.o
 OBJS += lib/string.o lib/assert.o
 
 ifeq ($(BOARD),QRPI2)
