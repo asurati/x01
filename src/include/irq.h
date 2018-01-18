@@ -21,14 +21,15 @@
 #include <barrier.h>
 #include <types.h>
 
-
 enum irq_hard {
 	IRQ_HARD_TIMER,
+	IRQ_HARD_MBOX,
 	IRQ_HARD_MAX
 };
 
 enum irq_soft {
 	IRQ_SOFT_TIMER,
+	IRQ_SOFT_MBOX,
 	IRQ_SOFT_MAX
 };
 
