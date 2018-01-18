@@ -18,11 +18,13 @@
 #ifndef _IO_H_
 #define _IO_H_
 
+#include <types.h>
+
 /* 1MB device memory mapped at io_base. */
-extern volatile void * const io_base;
+extern void * const io_base;
 
 #ifdef QRPI2
-extern volatile void * const ctrl_base;
+extern void * const ctrl_base;
 #endif /* QRPI2 */
 
 static inline uint32_t readl(const volatile void *addr)

@@ -21,7 +21,7 @@
 #include <io.h>
 
 extern char vm_dev_start;
-volatile void * const io_base = &vm_dev_start;
+void * const io_base = &vm_dev_start;
 
 
 #ifdef QRPI2
@@ -29,7 +29,7 @@ volatile void * const io_base = &vm_dev_start;
 #define IO_BASE_PA	0x3f000000
 #define CTRL_BASE_PA	0x40000000
 
-volatile void * const ctrl_base = &vm_dev_start + 1024*1024;
+void * const ctrl_base = &vm_dev_start + 1024*1024;
 
 static void io_ctrl_init(struct mmu_map_req *r)
 {
