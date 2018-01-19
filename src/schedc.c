@@ -68,9 +68,16 @@ static void schedule_preempt_disabled()
 	struct thread *next;
 	extern void *_schedule(void **, void **);
 
+	if (current->state == THRD_STATE_WAKING)
+		return;
+
 	if (list_empty(&ready)) {
 		irq_soft_disable();
-		current->ticks = THRD_QUOTA;
+		/* If this was a voluntary schedule and no ready
+		 * thread was found, do not reset the quota.
+		 */
+		if (current->ticks <= 0)
+			current->ticks = THRD_QUOTA;
 		irq_soft_enable();
 		return;
 	}
@@ -79,14 +86,18 @@ static void schedule_preempt_disabled()
 	list_del(e);
 
 	next = list_entry(e, struct thread, entry);
-	next->state = THRD_STATE_RUNNING;
-	next->ticks = THRD_QUOTA;
+
+	/* If the next thread had voluntary scheduled, do
+	 * not reset the quota.
+	 */
+	if (next->ticks <= 0)
+		next->ticks = THRD_QUOTA;
 
 	/* Because of the soft IRQ, the ready current thread may
 	 * continue accumulating ticks.
 	 */
-	current->state = THRD_STATE_READY;
-	list_add_tail(&current->entry, &ready);
+	if (current->state == THRD_STATE_READY)
+		list_add_tail(&current->entry, &ready);
 
 	/* Pass the pointer to the context field so that
 	 * _schedule can save the stack pointer to the context frame
@@ -106,10 +117,29 @@ static void schedule_preempt_disabled()
 	sched_switch(ctx);
 }
 
+/* Preemption must be enabled when schedule is called. */
 void schedule()
 {
 	preempt_disable();
+	assert(preempt_depth() == 1);
 	schedule_preempt_disabled();
+	preempt_enable();
+}
+
+void wake_up(struct list_head *wq)
+{
+	struct list_head *e;
+	struct thread *t;
+
+	preempt_disable();
+	while (!list_empty(wq)) {
+		e = wq->next;
+		list_del(e);
+
+		t = list_entry(e, struct thread, entry);
+		t->state = THRD_STATE_WAKING;
+		list_add_tail(e, &ready);
+	}
 	preempt_enable();
 }
 

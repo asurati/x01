@@ -56,8 +56,11 @@ void excpt_irq()
 
 	irq_soft();
 
-	if (preempt_depth() == 0 && sched_quota_consumed())
+	if (preempt_depth() == 0 && sched_quota_consumed()) {
+		set_current_state(THRD_STATE_READY);
 		schedule();
+		set_current_state(THRD_STATE_RUNNING);
+	}
 
 irq_done:
 	irq_disable();

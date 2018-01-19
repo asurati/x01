@@ -23,6 +23,8 @@
 
 #define THRD_STATE_RUNNING		1
 #define THRD_STATE_READY		2
+#define THRD_STATE_WAITING		3
+#define THRD_STATE_WAKING		4
 
 #define THRD_QUOTA			5
 
@@ -39,6 +41,8 @@ struct thread {
 	int irq_disable_depth;
 };
 
+extern struct thread *current;
+
 struct context {
 	uintptr_t is_fresh;
 	uintptr_t cpsr;
@@ -46,7 +50,10 @@ struct context {
 	uintptr_t lr;
 };
 
-extern struct thread *current;
+#define set_current_state(s)						\
+	do {								\
+		current->state = (s);					\
+	} while (0)
 
 /* Disable/Enable provide acquire/release semantics on
  * single processor alone. The effects of the
@@ -119,9 +126,25 @@ static inline int preempt_disabled()
 		(preempt_depth() > 0);
 }
 
+#define wait_event(wq, cond)						\
+	do {								\
+		preempt_disable();					\
+		set_current_state(THRD_STATE_WAITING);			\
+		list_add_tail(&current->entry, (wq));			\
+		while (!(cond)) {					\
+			preempt_enable();				\
+			schedule();					\
+			preempt_disable();				\
+		}							\
+		set_current_state(THRD_STATE_RUNNING);			\
+		preempt_enable();					\
+	} while (0)
+
 typedef int (*thread_fn)(void *p);
 
 void		sched_init();
 void		sched_timer_tick();
 struct thread	*sched_thread_create(thread_fn fn, void *p);
+void		wake_up(struct list_head *wq);
+void		schedule();
 #endif
