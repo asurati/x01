@@ -17,6 +17,8 @@
 
 #include <assert.h>
 #include <mmu.h>
+#include <irq.h>
+#include <sched.h>
 
 extern char excpt_start;
 static const void *excpt_vec_base = &excpt_start;
@@ -34,7 +36,33 @@ void excpt_pabort() {loop();}
 void excpt_dabort() {loop();}
 void excpt_res() {loop();}
 void excpt_fiq() {loop();}
-/* excpt_irq() within irq.c. */
+
+/* Called with IRQs disabled. */
+void excpt_irq()
+{
+	extern int irq_hard();
+	extern int irq_soft();
+	extern int sched_quota_consumed();
+	extern void schedule();
+
+	irq_enter();
+
+	irq_hard();
+
+	irq_enable();
+
+	if (irq_depth() > 1 || irq_soft_depth() > 0)
+		goto irq_done;
+
+	irq_soft();
+
+	if (preempt_depth() == 0 && sched_quota_consumed())
+		schedule();
+
+irq_done:
+	irq_disable();
+	irq_exit();
+}
 
 void excpt_init()
 {

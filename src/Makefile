@@ -45,8 +45,9 @@ CFLAGS := -c -mcpu=arm1176jzf-s -ffreestanding -nostdlib -O3 -Wall -Wextra \
 	  -Werror -I ./include/ -fno-common -D$(BOARD) -g -mabi=aapcs
 AFLAGS := -mcpu=arm1176jzf-s
 
-OBJS := start.o boot.o main.o mmu.o bdy.o pm.o atomic.o slub.o
-OBJS += list.o vm.o io.o excpt.o excptc.o irq.o timer.o sched.o
+OBJS := start.o excpt.o sched.o
+OBJS += boot.o main.o mmu.o bdy.o pm.o atomic.o slub.o
+OBJS += list.o vm.o io.o excptc.o irq.o timer.o schedc.o
 OBJS += intc.o mbox.o
 OBJS += lib/string.o lib/assert.o
 
@@ -73,7 +74,7 @@ $(BIN): $(ELF)
 $(ELF): $(OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@
 
-%.o: %.S
+%.o: %.s
 	$(AS) $(AFLAGS) $< -o $@
 
 %.o: %.c	

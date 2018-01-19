@@ -28,52 +28,31 @@ static struct irq irqs_soft[IRQ_SOFT_MAX];
 
 static volatile uint32_t irq_soft_mask;
 
-int excpt_irq_soft()
+/* Runs with interrupts enabled, but soft IRQs disabled (to prevent
+ * recursive calls). */
+
+int irq_soft()
 {
 	int i;
 	uint32_t mask;
 
 	while (1) {
-		/* The store to the global mask must not be moved
-		 * into a region where the IRQs are enabled. Hence,
-		 * irq_enable() must provide release semantics.
-		 */
+		irq_disable();
 		mask = irq_soft_mask;
+		irq_soft_mask = 0;
+		irq_enable();
+
 		if (!mask)
 			break;
 
-		irq_soft_mask = 0;
-
-		/* Without the "memory" barrier, the compiler optimizes
-		 * away the inc/dec of irq_soft_depth, since it can prove
-		 * that the value remains unchanged within the function.
-		 */
-		irq_enable();
-
-		/* It is being assumed that number of instructions below
-		 * (before the IRQs are disabled again) is large enough to
-		 * allow taking pending interrupts. Else, isb() must
-		 * be inserted here to force the CPU to take any pending
-		 * interrupts.
-		 */
-
-		for (i = 0; i < IRQ_SOFT_MAX && mask; ++i) {
-			if ((mask & (1 << i)) == 0)
-				continue;
-			mask &= ~(1 << i);
-			irqs_soft[i].fn(irqs_soft[i].data);
-		}
-
-		irq_disable();
-		/* The load of the global mask must not be moved
-		 * into a region where the IRQs are enabled. Hence,
-		 * irq_disable must provide acquire semantics.
-		 */
+		for (i = 0; i < IRQ_SOFT_MAX && mask; ++i, mask >>= 1)
+			if (mask & 1)
+				irqs_soft[i].fn(irqs_soft[i].data);
 	}
 	return 0;
 }
 
-int excpt_irq()
+int irq_hard()
 {
 	int i, ret;
 	ret = 0;

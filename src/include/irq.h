@@ -41,8 +41,7 @@ enum irq_soft {
  */
 static inline void irq_enable()
 {
-	dmb();
-	asm volatile("cpsie i" : : : "cc");
+	asm volatile("cpsie i" : : : "cc", "memory");
 }
 
 /* CPSID is probably a hw read/write barrier. So dmb()
@@ -51,8 +50,7 @@ static inline void irq_enable()
  */
 static inline void irq_disable()
 {
-	asm volatile("cpsid i" : : : "cc");
-	dmb();
+	asm volatile("cpsid i" : : : "cc", "memory");
 }
 
 #define IRQH_RET_NONE		0

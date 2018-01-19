@@ -21,8 +21,7 @@
 #include <list.h>
 
 #define THRD_STATE_RUNNING		1
-#define THRD_STATE_EVICTING		2
-#define THRD_STATE_READY		3
+#define THRD_STATE_READY		2
 
 #define THRD_QUOTA			5
 
@@ -31,11 +30,93 @@ struct thread {
 	void *usr_stack_hi;
 	void *svc_stack_hi;
 	void *context;
-	char quota;
 	char ticks;
-	char preemptible;
 	char state;
+	char res[2];
+	int preempt_disable_depth;
+	int irq_soft_disable_depth;
+	int irq_disable_depth;
 };
+
+struct context {
+	uintptr_t is_fresh;
+	uintptr_t cpsr;
+	uintptr_t reg[13];
+	uintptr_t lr;
+};
+
+extern struct thread *current;
+
+/* Disable/Enable provide acquire/release semantics on
+ * single processor alone. The effects of the
+ * enable/disable operations are observed only on the
+ * processor on which the thread is currently running.
+ * Hence, hardware barriers are not needed here.
+ *
+ * For any scheduler fields which can potentially be
+ * accessed by multiple agents, hardware barriers are
+ * required.
+ */
+static inline void preempt_disable()
+{
+	*(volatile int *)(&current->preempt_disable_depth) += 1;
+	barrier();
+}
+
+static inline void preempt_enable()
+{
+	barrier();
+	*(volatile int *)(&current->preempt_disable_depth) -= 1;
+}
+
+static inline int preempt_depth()
+{
+	return *(volatile int *)(&current->preempt_disable_depth);
+}
+
+static inline void irq_soft_disable()
+{
+	*(volatile int *)(&current->irq_soft_disable_depth) += 1;
+	barrier();
+}
+
+static inline void irq_soft_enable()
+{
+	barrier();
+	*(volatile int *)(&current->irq_soft_disable_depth) -= 1;
+}
+
+static inline int irq_soft_depth()
+{
+	return *(volatile int *)(&current->irq_soft_disable_depth);
+}
+
+/* These irq routines are meant to be called from excpt.S only.
+ * They are called with IRQs disabled. */
+static inline void irq_enter()
+{
+	*(volatile int *)(&current->irq_disable_depth) += 1;
+	barrier();
+}
+
+static inline void irq_exit()
+{
+	barrier();
+	*(volatile int *)(&current->irq_disable_depth) -= 1;
+}
+
+static inline int irq_depth()
+{
+	return *(volatile int *)(&current->irq_disable_depth);
+}
+
+/* Disabling soft IRQs imply disabling preemption. */
+static inline int preempt_disabled()
+{
+	return (irq_depth() > 0) ||
+		(irq_soft_depth() > 0) ||
+		(preempt_depth() > 0);
+}
 
 typedef int (*thread_fn)(void *p);
 

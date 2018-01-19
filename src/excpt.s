@@ -51,59 +51,10 @@ excpt_irq_addr:
 
 	srsdb	sp!, #19		@ Save spsr_irq and lr_irq
 					@ into the SVC stack
-	cps	#19
+	cps	#19			@ Switch to SVC mode
 	push	{r0-r3, r12, lr}	@ Save aapcs regs + lr_svc
 
-	bl	excpt_irq_enter
+	bl	excpt_irq
 
-	bl	excpt_irq		@ IRQ handler.
-
-	/* If the IRQ depth is > 1, do not process soft irqs here. */
-	ldr	r1, =irq_depth
-	ldr	r1, [r1]
-	cmp	r1, #1
-	bgt	irq_done
-
-	/* The IRQ depth is 1. If the handlers raised soft irqs,
-	 * process them.
-	 */
-	ands	r0, r0, #(1 << 1)	@ IRQH_RET_SOFT
-	beq	irq_done
-
-	bl	excpt_irq_soft
-
-	bl	sched_should_switch
-	cmp	r0, #0
-	beq	irq_done
-
-	push	{r4-r11}
-	mov	r0, sp
-	bl	swtch
-	mov	sp, r0
-	pop	{r4-r11}
-
-irq_done:
-	bl excpt_irq_exit
 	pop	{r0-r3, r12, lr}
 	rfeia	sp!			@ Undo srsdb
-
-/* The context frame is saved on the stack as shown below.
- * [top] r4-r11,r0-r3, r12,lr_svc,lr_irq,spsr_irq [bottom]
- */
-
-excpt_irq_enter:
-	ldr	r0, =irq_depth		@ Increment the IRQ depth
-	ldr	r1, [r0]
-	add	r1, r1, #1
-	str	r1, [r0]
-	bx	lr
-
-excpt_irq_exit:
-	ldr	r0, =irq_depth		@ Decrement the IRQ depth
-	ldr	r1, [r0]
-	sub	r1, r1, #1
-	str	r1, [r0]
-	bx	lr
-
-.section .bss
-irq_depth:	.word 0
