@@ -18,8 +18,10 @@
 #include <assert.h>
 #include <io.h>
 #include <irq.h>
+#include <list.h>
 #include <mbox.h>
 #include <mmu.h>
+#include <sched.h>
 #include <string.h>
 
 #define MBOX_BASE		0xb880
@@ -34,6 +36,7 @@
 #define MBOX_BUF_TYPE_POS	31
 #define MBOX_BUF_TYPE_SZ	1
 
+#define MBOX_TAG_MAC		0x10003
 #define MBOX_TAG_END		0
 
 #define MBOX_TAG_TYPE_POS	31
@@ -76,38 +79,34 @@ static int mbox_irq(void *data)
 {
 	data = data;
 
-	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND))
+	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
 		readl(&ro->rw);
+		irq_soft_raise(IRQ_SOFT_MBOX);
+	}
 	return 0;
 }
+
+struct list_head ioq;
+int signal;
 
 static int mbox_irq_soft(void *data)
 {
 	data = data;
+	signal = 1;
+	wake_up(&ioq);
 	return 0;
 }
 
 struct mbox_buf buf __attribute__ ((aligned (16)));
 
-void mbox_init()
+int mbox_get()
 {
 	uint32_t v;
 	uintptr_t pa;
 
-	wo = io_base + MBOX_ARM_WO;
-	ro = io_base + MBOX_ARM_RO;
+	init_list_head(&ioq);
 
-	assert(sizeof(struct mbox) == 0x20);
-
-	irq_insert(IRQ_HARD_MBOX, mbox_irq, NULL);
-	irq_soft_insert(IRQ_SOFT_MBOX, mbox_irq_soft, NULL);
-
-	/* QRPI2 supports raising interrupts when VC responds to
-	 * ARM's requests.
-	 */
-	v = 0;
-	BF_SET(v, MBOX_RO_IRQ_EN, 1);
-	writel(v, &ro->config);
+	signal = 0;
 
 	buf.sz = sizeof(buf);
 	buf.u.mac.hdr.id = MBOX_TAG_MAC;
@@ -129,7 +128,33 @@ void mbox_init()
 
 	writel(pa, &wo->rw);
 
+	wait_event(&ioq, signal == 1);
+
+	while (1)
+		asm volatile("wfi");
+}
+
+void mbox_init()
+{
+	uint32_t v;
+
+	wo = io_base + MBOX_ARM_WO;
+	ro = io_base + MBOX_ARM_RO;
+
+	assert(sizeof(struct mbox) == 0x20);
+
+	irq_insert(IRQ_HARD_MBOX, mbox_irq, NULL);
+	irq_soft_insert(IRQ_SOFT_MBOX, mbox_irq_soft, NULL);
+
+	/* QRPI2 supports raising interrupts when VC responds to
+	 * ARM's requests.
+	 */
+	v = 0;
+	BF_SET(v, MBOX_RO_IRQ_EN, 1);
+	writel(v, &ro->config);
+
 	return;
+/*
 	while (1) {
 		v = readl(&ro->status);
 		if (v & 0x40000000)
@@ -144,4 +169,5 @@ void mbox_init()
 
 	while (1)
 		asm volatile("wfi");
+		*/
 }

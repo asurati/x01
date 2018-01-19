@@ -18,7 +18,10 @@
 #ifndef _MBOX_H_
 #define _MBOX_H_
 
-#define MBOX_TAG_MAC		0x10003
+enum mbox_property {
+	MBOX_PROP_MAC,
+	MBOX_PROP_MAX
+};
 
 void	mbox_init();
 #endif
