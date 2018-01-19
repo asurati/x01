@@ -67,9 +67,4 @@ struct list_head {
 	struct list_head *next;
 };
 
-#define barrier()	\
-	do { \
-		asm volatile("" : : : "memory"); \
-	} while (0)
-
 #endif

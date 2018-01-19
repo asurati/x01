@@ -19,6 +19,7 @@
 #define _SCHED_H_
 
 #include <list.h>
+#include <barrier.h>
 
 #define THRD_STATE_RUNNING		1
 #define THRD_STATE_READY		2
