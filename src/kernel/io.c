@@ -23,18 +23,18 @@
 extern char vm_dev_start;
 void * const io_base = &vm_dev_start;
 
-
 #ifdef QRPI2
 
 #define IO_BASE_PA	0x3f000000
 #define CTRL_BASE_PA	0x40000000
 
-void * const ctrl_base = &vm_dev_start + 1024*1024;
+void * const ctrl_base = &vm_dev_start + 4 * 1024*1024;
 
 static void io_ctrl_init(struct mmu_map_req *r)
 {
 	int ret;
 
+	r->n = 1;
 	r->va_start = (void *)ctrl_base;
 	r->pa_start = CTRL_BASE_PA;
 
@@ -57,7 +57,7 @@ void io_init()
 
 	r.va_start = (void *)io_base;
 	r.pa_start = IO_BASE_PA;
-	r.n = 1;
+	r.n = 4;		/* For UART, etc. */
 	r.mt = MT_DEV_SHR;
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_SECTION;
