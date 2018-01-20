@@ -31,6 +31,10 @@ extern const uintptr_t pt_area_va;
 #define PAGE_SIZE		(1ull << PAGE_SIZE_SZ)
 #define PAGE_SIZE_MASK		BF_MASK(PAGE_SIZE)
 
+#define SECTION_SIZE_SZ		20
+#define SECTION_SIZE		(1ull << SECTION_SIZE_SZ)
+#define SECTION_SIZE_MASK		BF_MASK(SECTION_SIZE)
+
 #define PDE_TYPE0_POS		 0
 #define PDE_B_POS		 2
 #define PDE_C_POS		 3
