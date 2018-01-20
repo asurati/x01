@@ -22,6 +22,7 @@
 #include <mbox.h>
 #include <mmu.h>
 #include <sched.h>
+#include <slub.h>
 #include <string.h>
 
 #define MBOX_BASE		0xb880
@@ -36,11 +37,16 @@
 #define MBOX_BUF_TYPE_POS	31
 #define MBOX_BUF_TYPE_SZ	1
 
+#define MBOX_CH_FB		1
+#define MBOX_CH_PROP		8
+
 #define MBOX_TAG_MAC		0x10003
 #define MBOX_TAG_END		0
 
 #define MBOX_TAG_TYPE_POS	31
 #define MBOX_TAG_TYPE_SZ	1
+
+static struct list_head ioq;
 
 struct mbox {
 	uint32_t rw;
@@ -66,7 +72,7 @@ struct mbox_tag_mac {
 	uint8_t pad[2];
 };
 
-struct mbox_buf {
+struct mbox_prop_buf {
 	uint32_t sz;
 	uint32_t code;
 	union {
@@ -75,20 +81,33 @@ struct mbox_buf {
 	uint32_t end;
 };
 
+struct mbox_fb_buf {
+	uint32_t pw;
+	uint32_t ph;
+	uint32_t vw;
+	uint32_t vh;
+	uint32_t pitch;
+	uint32_t depth;
+	uint32_t vx;
+	uint32_t vy;
+	uint32_t addr;
+	uint32_t sz;
+};
+
 static int mbox_irq(void *data)
 {
 	data = data;
 
 	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
+		/* Silence the interrupt by reading the RW field. */
 		readl(&ro->rw);
 		irq_soft_raise(IRQ_SOFT_MBOX);
 	}
 	return 0;
 }
 
-struct list_head ioq;
-int signal;
-
+/* Temporary hack before the IO manager is implemented. */
+static int signal;
 static int mbox_irq_soft(void *data)
 {
 	data = data;
@@ -97,46 +116,49 @@ static int mbox_irq_soft(void *data)
 	return 0;
 }
 
-struct mbox_buf buf __attribute__ ((aligned (16)));
-
-int mbox_get()
+int mbox_fb_alloc(int width, int height, int depth, uintptr_t *addr,
+		  size_t *sz, int *pitch)
 {
-	uint32_t v;
 	uintptr_t pa;
+	struct mbox_fb_buf *b;
 
-	init_list_head(&ioq);
+	/* All kmalloc allocations > 8 are 16-byte aligned. */
+	b = kmalloc(sizeof(*b));
+	memset(b, 0, sizeof(*b));
 
-	signal = 0;
+	b->pw = b->vw = width;
+	b->ph = b->vh = height;
+	b->depth = depth;
 
-	buf.sz = sizeof(buf);
-	buf.u.mac.hdr.id = MBOX_TAG_MAC;
-	buf.u.mac.hdr.sz = 6;
+	mmu_dcache_clean_inv(b, sizeof(*b));
 
-	mmu_dcache_clean(&buf, sizeof(buf));
-
-	pa = mmu_va_to_pa(NULL, &buf);
+	pa = mmu_va_to_pa(NULL, b);
 	assert(ALIGNED(pa, 16));
-	pa |= 8;
+	pa |= MBOX_CH_FB;
 
-	while (1) {
-		v = readl(&wo->status);
-		if (v & 0x80000000)
-			continue;
-		else
-			break;
-	}
+	while (readl(&wo->status) & 0x80000000)
+		;
 
 	writel(pa, &wo->rw);
-
 	wait_event(&ioq, signal == 1);
 
-	while (1)
-		asm volatile("wfi");
+	/* wait_event implies barriers. */
+	signal = 0;
+
+	/* TODO Check return parameters. */
+	*addr = b->addr;
+	*sz = b->sz;
+	*pitch = b->pitch;
+
+	kfree(b);
+	return 0;
 }
 
 void mbox_init()
 {
 	uint32_t v;
+
+	init_list_head(&ioq);
 
 	wo = io_base + MBOX_ARM_WO;
 	ro = io_base + MBOX_ARM_RO;
@@ -154,20 +176,4 @@ void mbox_init()
 	writel(v, &ro->config);
 
 	return;
-/*
-	while (1) {
-		v = readl(&ro->status);
-		if (v & 0x40000000)
-			continue;
-		else
-			break;
-	}
-
-	v = ro->rw;
-	assert((v & 0xf) == 8);
-	mmu_dsb();
-
-	while (1)
-		asm volatile("wfi");
-		*/
 }

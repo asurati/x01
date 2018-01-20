@@ -24,4 +24,6 @@ enum mbox_property {
 };
 
 void	mbox_init();
+int	mbox_fb_alloc(int width, int height, int depth, uintptr_t *addr,
+		      size_t *sz, int *pitch);
 #endif
