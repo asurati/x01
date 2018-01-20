@@ -34,10 +34,11 @@ ELF := pi.elf
 BIN := pi.bin
 GZBIN := $(BIN).gz
 HWIMG := hw.img
-SWIMG := sw.img
+
+#-d int,guest_errors,unimp -display none
 
 QFLAGS := -m 256 -M raspi2 -kernel $(BIN) -serial stdio \
-	  -d int,guest_errors,unimp -display none \
+	  -d int,guest_errors,unimp \
 	  -monitor tcp::4444,server,nowait
 
 LDFLAGS := -n -T pi.ld -defsym LOAD_PA=$(LOAD_PA)
@@ -48,7 +49,7 @@ AFLAGS := -mcpu=arm1176jzf-s
 OBJS := start.o excpt.o sched.o
 OBJS += boot.o main.o mmu.o bdy.o pm.o atomic.o slub.o
 OBJS += list.o vm.o io.o excptc.o irq.o timer.o schedc.o
-OBJS += intc.o mbox.o
+OBJS += intc.o mbox.o fb.o
 OBJS += lib/string.o lib/assert.o
 
 ifeq ($(BOARD),QRPI2)
@@ -81,7 +82,7 @@ $(ELF): $(OBJS)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -f $(BIN) $(GZBIN) $(ELF) $(HWIMG) $(SWIMG) $(OBJS)
+	rm -f $(BIN) $(GZBIN) $(ELF) $(HWIMG) $(OBJS)
 
 rundbg:
 	$(QEMU) $(QFLAGS) -s -S
