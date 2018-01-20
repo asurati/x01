@@ -17,6 +17,7 @@
 
 OUTPUT_FORMAT(elf32-littlearm)
 ENTRY(start)
+
 /* Corresponds to the TTBCR.N setting. */
 KMODE_VA = 0x40000000;
 
@@ -24,9 +25,9 @@ SECTIONS
 {
 	. = LOAD_PA;
 	.boot : {
-		start.o(.text);
-		boot.o(.text);
-		boot.o(.rodata);
+		boot/start.o(.text);
+		boot/boot.o(.text);
+		boot/boot.o(.rodata);
 	}
 
 	. = ALIGN(0x1000) + KMODE_VA;
@@ -120,7 +121,7 @@ SECTIONS
 	. = 0xffff0000;
 	excpt_start = .;
 	.excpt : AT (excpt_start_pa) {
-		excpt.o(.excpt);
+		kernel/excpt.o(.excpt);
 	}
 
 }

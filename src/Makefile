@@ -35,6 +35,37 @@ BIN := pi.bin
 GZBIN := $(BIN).gz
 HWIMG := hw.img
 
+OBJS := boot/start.o
+OBJS += boot/boot.o
+
+OBJS += lib/string.o
+OBJS += lib/assert.o
+
+OBJS += kernel/excpt.o
+OBJS += kernel/sched.o
+OBJS += kernel/mmu.o
+OBJS += kernel/bdy.o
+OBJS += kernel/pm.o
+OBJS += kernel/atomic.o
+OBJS += kernel/slub.o
+OBJS += kernel/list.o
+OBJS += kernel/vm.o
+OBJS += kernel/io.o
+OBJS += kernel/excptc.o
+OBJS += kernel/irq.o
+OBJS += kernel/schedc.o
+OBJS += kernel/fb.o
+OBJS += kernel/main.o
+
+OBJS += dev/timer.o
+OBJS += dev/intc.o
+OBJS += dev/mbox.o
+ifeq ($(BOARD),QRPI2)
+OBJS += dev/timer_qrpi2.o
+else
+OBJS += dev/timer_rpi1.o
+endif
+
 #-d int,guest_errors,unimp -display none
 
 QFLAGS := -m 256 -M raspi2 -kernel $(BIN) -serial stdio \
@@ -45,18 +76,6 @@ LDFLAGS := -n -T pi.ld -defsym LOAD_PA=$(LOAD_PA)
 CFLAGS := -c -mcpu=arm1176jzf-s -ffreestanding -nostdlib -O3 -Wall -Wextra \
 	  -Werror -I ./include/ -fno-common -D$(BOARD) -g -mabi=aapcs
 AFLAGS := -mcpu=arm1176jzf-s
-
-OBJS := start.o excpt.o sched.o
-OBJS += boot.o main.o mmu.o bdy.o pm.o atomic.o slub.o
-OBJS += list.o vm.o io.o excptc.o irq.o timer.o schedc.o
-OBJS += intc.o mbox.o fb.o
-OBJS += lib/string.o lib/assert.o
-
-ifeq ($(BOARD),QRPI2)
-	OBJS += timer_qrpi2.o
-else
-	OBJS += timer_rpi1.o
-endif
 
 IMG_ENTRY = 0x$(shell xxd -l 4 -s 0x18 -e $(ELF) | cut -c11-18)
 

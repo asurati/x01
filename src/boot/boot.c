@@ -28,7 +28,6 @@ extern char rodata_start, rodata_end;
 extern char data_start, data_end;
 extern char bss_start, bss_end;
 extern char k_pd_start, k_pd_end;
-//extern char ptab_start, ptab_end;
 
 /* rwx == 4 2 1. */
 static const struct section si[] = {
@@ -37,7 +36,6 @@ static const struct section si[] = {
 	{(uintptr_t)&data_start,	(uintptr_t)&data_end,	6},
 	{(uintptr_t)&bss_start,		(uintptr_t)&bss_end,	6},
 	{(uintptr_t)&k_pd_start,	(uintptr_t)&k_pd_end,	6},
-	//{(uintptr_t)&ptab_start,	(uintptr_t)&ptab_end,	6},
 };
 
 /* Zero the kernel page directory and table.
