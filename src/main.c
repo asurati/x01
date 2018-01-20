@@ -26,10 +26,65 @@
 #include <timer.h>
 #include <sched.h>
 #include <mbox.h>
+#include <fb.h>
+#include <list.h>
+#include <string.h>
 
-int thr0(void *p);
+static int display_thread(void *p)
+{
+	void *q;
+	const int sz = 64;
+	int i, row, colsz;
+	const struct fb_info *fbi = fb_info_get();
+	uint8_t *line[2];
+
+	p = p;
+
+	colsz = (fbi->depth >> 3) * sz;
+	line[0] = kmalloc(colsz);
+	line[1] = kmalloc(colsz);
+
+	memset(line[0], 0, colsz);
+	memset(line[1], 0, colsz);
+
+	for (i = 0; i < colsz; i += (fbi->depth >> 3)) {
+		line[0][i] = 0xff;		/* Red */
+		line[1][i + 2] = 0xff;		/* Blue */
+	}
+
+	i = 0;
+	while (1) {
+		p = fbi->addr;
+		q = p + fbi->pitch - colsz;
+		for (row = 0; row < sz; ++row) {
+			memcpy(p, line[i], colsz);
+			memcpy(q, line[i], colsz);
+			p += fbi->pitch;
+			q += fbi->pitch;
+		}
+
+		p = fbi->addr + (fbi->height - sz) * fbi->pitch;
+		q = p + fbi->pitch - colsz;
+		for (row = 0; row < sz; ++row) {
+			memcpy(p, line[i], colsz);
+			memcpy(q, line[i], colsz);
+			p += fbi->pitch;
+			q += fbi->pitch;
+		}
+
+		/* Since the only interrupt active is the timer interrupt, which
+		 * fires every second, the loop wakes up every second to change
+		 * the colour of the box.
+		 */
+		asm volatile("wfi");
+		i = !i;
+	}
+	return 0;
+}
+
 void kmain(const void *al)
 {
+	struct list_head wq;
 	uint32_t ram, ramsz;
 	const uint32_t *p = al;
 
@@ -59,20 +114,16 @@ void kmain(const void *al)
 	sched_init();
 	timer_init();
 	mbox_init();
-	sched_thread_create(thr0, (void *)0xdeaddead);
 
 	/* Enable IRQs once hard and soft IRQs are setup. */
 	irq_enable();
 
-	while (1)
-		asm volatile("wfi");
-}
+	fb_init();
 
-int thr0(void *p)
-{
-	p = p;
-	while (1)
-		asm volatile("wfi");
-	return 0;
-}
+	sched_thread_create(display_thread, NULL);
 
+	init_list_head(&wq);
+
+	/* Remove this thread from scheduling. */
+	wait_event(&wq, 0);
+}
