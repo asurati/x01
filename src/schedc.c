@@ -53,7 +53,14 @@ void sched_switch(void **ctx)
 	next = container_of(ctx, struct thread, context);
 
 	/* This is the point at which the new thread starts accumulating
-	 * ticks.
+	 * ticks. The changes made to the fields of next must be visible
+	 * before the current is set to next. Else, it may so happen that
+	 * although the current is updated to the next, accessing those
+	 * fields through the current pointer may still provide older
+	 * values (values from when the next was kept on the ready queue).
+	 *
+	 * The barrier within the soft IRQ lock ensures that the changes
+	 * are visible in the correct order.
 	 */
 	irq_soft_disable();
 	current = next;
@@ -105,10 +112,7 @@ static void schedule_preempt_disabled()
 	 */
 	ctx = &current->context;
 
-	/* The function switches the stack upon return. That creates
-	 * problems for a newly-created thread, since it needs to
-	 * reserve space. We reserve 8 words.
-	 */
+	/* The function switches the stack upon return. */
 	ctx = _schedule(&next->context, ctx);
 
 	/* Do not use any local variable initialized from above the

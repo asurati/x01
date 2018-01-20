@@ -28,6 +28,9 @@
 
 #define THRD_QUOTA			5
 
+/* thread.ticks: Accesses need sync with soft IRQs.
+ * thread.state: Accesses need sync with scheduler.
+ */
 struct thread {
 	struct list_head entry;
 	void *usr_stack_hi;
@@ -50,6 +53,7 @@ struct context {
 	uintptr_t lr;
 };
 
+/* Should we add barrier here? */
 #define set_current_state(s)						\
 	do {								\
 		current->state = (s);					\
