@@ -24,6 +24,7 @@
 #include <sched.h>
 #include <slub.h>
 #include <string.h>
+#include <lock.h>
 
 #define MBOX_BASE		0xb880
 #define MBOX_ARM_RO		(MBOX_BASE)
@@ -46,6 +47,10 @@
 #define MBOX_TAG_TYPE_POS	31
 #define MBOX_TAG_TYPE_SZ	1
 
+static int io_pending;
+static struct io_req *req_pending;
+
+static struct lock ioq_lock;
 static struct list_head ioq;
 
 struct mbox {
@@ -60,40 +65,6 @@ struct mbox {
 static struct mbox *wo;
 static struct mbox *ro;
 
-struct mbox_tag {
-	uint32_t id;
-	uint32_t sz;
-	uint32_t type;
-};
-
-struct mbox_tag_clk_rate {
-	struct mbox_tag hdr;
-	uint32_t id;
-	uint32_t rate;
-};
-
-struct mbox_prop_buf {
-	uint32_t sz;
-	uint32_t code;
-	union {
-		struct mbox_tag_clk_rate clk_rate;
-	} u;
-	uint32_t end;
-};
-
-struct mbox_fb_buf {
-	uint32_t pw;
-	uint32_t ph;
-	uint32_t vw;
-	uint32_t vh;
-	uint32_t pitch;
-	uint32_t depth;
-	uint32_t vx;
-	uint32_t vy;
-	uint32_t addr;
-	uint32_t sz;
-};
-
 static int mbox_irq(void *data)
 {
 	data = data;
@@ -106,77 +77,80 @@ static int mbox_irq(void *data)
 	return 0;
 }
 
-/* Temporary hack before the IO manager is implemented. */
-static int signal;
+static void mbox_io_kick();
 static int mbox_irq_sched(void *data)
 {
 	data = data;
-	signal = 1;
-	wake_up(&ioq);
+	barrier();
+	BF_SET(req_pending->flags, IORF_DONE, 1);
+	wake_up(req_pending->wq);
+	/* Cannot touch the request once the wake up
+	 * has been signalled.
+	 */
+	req_pending = NULL;
+	if (io_pending)
+		mbox_io_kick();
 	return 0;
 }
 
-static void mbox_do_io(void *b, size_t sz, int ch)
+static void mbox_io_kick()
 {
+	int ch;
 	uintptr_t pa;
+	struct list_head *e;
 
-	mmu_dcache_clean_inv(b, sz);
+	lock_sched_lock(&ioq_lock);
+	assert(!list_empty(&ioq));
+	e = list_del_head(&ioq);
+	--io_pending;
+	lock_sched_unlock(&ioq_lock);
 
-	pa = mmu_va_to_pa(NULL, b);
+	assert(req_pending == NULL);
+	req_pending = list_entry(e, struct io_req, entry);
+	/* Error error checking. */
+	if (BF_GET(req_pending->u.ioctl.code, IOCTL_CODE) ==
+	    MBOX_IOCTL_UART_CLOCK)
+		ch = MBOX_CH_PROP;
+	else
+		ch = MBOX_CH_FB;
+
+
+	mmu_dcache_clean_inv(req_pending->req, req_pending->sz);
+
+	pa = mmu_va_to_pa(NULL, req_pending->req);
 	assert(ALIGNED(pa, 16));
 	pa |= ch;
+
+	barrier();
 
 	while (readl(&wo->status) & 0x80000000)
 		;
 
 	writel(pa, &wo->rw);
-	wait_event(&ioq, signal == 1);
-	signal = 0;
 }
 
-int mbox_fb_alloc(int width, int height, int depth, uintptr_t *addr,
-		  size_t *sz, int *pitch)
+
+/* Process context only. */
+int mbox_io(struct io_req *r)
 {
-	struct mbox_fb_buf *b;
+	int kick;
 
-	/* All kmalloc allocations > 8 are 16-byte aligned. */
-	b = kmalloc(sizeof(*b));
-	memset(b, 0, sizeof(*b));
+	BF_SET(r->flags, IORF_DONE, 0);
+	r->ret = 0;
 
-	b->pw = b->vw = width;
-	b->ph = b->vh = height;
-	b->depth = depth;
+	kick = 0;
 
-	mbox_do_io(b, sizeof(*b), MBOX_CH_FB);
+	lock_sched_lock(&ioq_lock);
+	list_add_tail(&r->entry, &ioq);
+	++io_pending;
+	if (io_pending == 1)
+		kick = 1;
+	lock_sched_unlock(&ioq_lock);
 
-	/* TODO Check return parameters. */
-	*addr = b->addr;
-	*sz = b->sz;
-	*pitch = b->pitch;
+	if (kick)
+		mbox_io_kick();
 
-	kfree(b);
-	return 0;
-}
-
-uint32_t mbox_uart_clk()
-{
-	uint32_t v;
-	struct mbox_prop_buf *b;
-
-	/* All kmalloc allocations > 8 are 16-byte aligned. */
-	b = kmalloc(sizeof(*b));
-	memset(b, 0, sizeof(*b));
-
-	b->sz = sizeof(*b);
-	b->u.clk_rate.hdr.id = 0x30002;
-	b->u.clk_rate.hdr.sz = 8;
-	b->u.clk_rate.id = 2;
-
-	mbox_do_io(b, sizeof(*b), MBOX_CH_PROP);
-	v = b->u.clk_rate.rate;
-
-	kfree(b);
-	return v;
+	return IO_RET_PENDING;
 }
 
 void mbox_init()
@@ -184,6 +158,7 @@ void mbox_init()
 	uint32_t v;
 
 	init_list_head(&ioq);
+	io_pending = 0;
 
 	wo = io_base + MBOX_ARM_WO;
 	ro = io_base + MBOX_ARM_RO;

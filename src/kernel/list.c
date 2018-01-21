@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <list.h>
 
 void init_list_head(struct list_head *head)
@@ -54,6 +55,15 @@ void list_del(struct list_head *e)
 	p = e->prev;
 	p->next = n;
 	n->prev = p;
+}
+
+struct list_head *list_del_head(struct list_head *head)
+{
+	struct list_head *e;
+	assert(!list_empty(head));
+	e = head->next;
+	list_del(e);
+	return e;
 }
 
 void list_add_sorted(struct list_head *n, struct list_head *head,

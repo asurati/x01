@@ -35,43 +35,45 @@
 static int display_thread(void *p)
 {
 	void *q;
+	struct fb_info fbi;
 	const int sz = 64;
 	int i, row, colsz;
-	const struct fb_info *fbi = fb_info_get();
 	uint8_t *line[2];
 
 	p = p;
 
-	colsz = (fbi->depth >> 3) * sz;
+	fb_info_get(&fbi);
+
+	colsz = (fbi.depth >> 3) * sz;
 	line[0] = kmalloc(colsz);
 	line[1] = kmalloc(colsz);
 
 	memset(line[0], 0, colsz);
 	memset(line[1], 0, colsz);
 
-	for (i = 0; i < colsz; i += (fbi->depth >> 3)) {
+	for (i = 0; i < colsz; i += (fbi.depth >> 3)) {
 		line[0][i] = 0xff;		/* Red */
 		line[1][i + 2] = 0xff;		/* Blue */
 	}
 
 	i = 0;
 	while (1) {
-		p = fbi->addr;
-		q = p + fbi->pitch - colsz;
+		p = fbi.addr;
+		q = p + fbi.pitch - colsz;
 		for (row = 0; row < sz; ++row) {
 			memcpy(p, line[i], colsz);
 			memcpy(q, line[i], colsz);
-			p += fbi->pitch;
-			q += fbi->pitch;
+			p += fbi.pitch;
+			q += fbi.pitch;
 		}
 
-		p = fbi->addr + (fbi->height - sz) * fbi->pitch;
-		q = p + fbi->pitch - colsz;
+		p = fbi.addr + (fbi.height - sz) * fbi.pitch;
+		q = p + fbi.pitch - colsz;
 		for (row = 0; row < sz; ++row) {
 			memcpy(p, line[i], colsz);
 			memcpy(q, line[i], colsz);
-			p += fbi->pitch;
-			q += fbi->pitch;
+			p += fbi.pitch;
+			q += fbi.pitch;
 		}
 
 		/* Since the only interrupt active is the timer interrupt, which

@@ -15,9 +15,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <io.h>
 #include <mbox.h>
 #include <uart.h>
+#include <slub.h>
+#include <ioreq.h>
+#include <list.h>
+#include <string.h>
+#include <sched.h>
 
 #define UART_BASE		0x201000
 
@@ -41,11 +47,35 @@
 
 #define UART_LCRH_WLEN_8	3
 
+int gclk;
 void uart_init()
 {
+	int ret;
 	uint32_t clk, ibrd, fbrd, dvdr, v;
+	struct mbox_prop_buf *b;
+	struct list_head wq;
+	struct io_req ior;
 
-	clk = mbox_uart_clk();
+	b = kmalloc(sizeof(*b));
+	memset(b, 0, sizeof(*b));
+
+	b->sz = sizeof(*b);
+	b->u.clk_rate.hdr.id = 0x30002;
+	b->u.clk_rate.hdr.sz = 8;
+	b->u.clk_rate.id = 2;
+
+	init_list_head(&wq);
+	memset(&ior, 0, sizeof(ior));
+	ior.wq = &wq;
+	ior.req = b;
+	ior.sz = b->sz;
+	IOCTL(&ior, MBOX_IOCTL_UART_CLOCK, IOCTL_DIR_READ);
+	ret = mbox_io(&ior);
+	assert(ret == IO_RET_PENDING);
+	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
+
+	gclk = clk = b->u.clk_rate.rate;
+	kfree(b);
 
 	dvdr = 115200 << 4;
 	ibrd = clk / dvdr;

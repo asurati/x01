@@ -20,41 +20,63 @@
 #include <vm.h>
 #include <string.h>
 #include <fb.h>
+#include <ioreq.h>
+#include <list.h>
+#include <sched.h>
+#include <slub.h>
 
-static struct fb_info fbi;
+static struct mbox_fb_buf *fbi;
+static void *fb;
 
-const struct fb_info *fb_info_get()
+int fb_info_get(struct fb_info *fi)
 {
-	return &fbi;
+	fi->width = fbi->phy_width;
+	fi->height = fbi->phy_height;
+	fi->depth = fbi->depth;
+	fi->pitch = fbi->pitch;
+	fi->addr = fb;
+	fi->sz = fbi->sz;
+	return 0;
 }
 
 void fb_init()
 {
 	int ret;
-	uintptr_t pa;
+	struct list_head wq;
+	struct io_req ior;
 	struct mmu_map_req r;
 	size_t sz;
 
-	ret = vm_alloc(VMA_SLUB, VM_UNIT_4MB, 1, &fbi.addr);
+	ret = vm_alloc(VMA_SLUB, VM_UNIT_4MB, 1, &fb);
 	assert(ret == 0);
 
-	fbi.width = 1024;
-	fbi.height = 768;
-	fbi.depth = 24;
+	fbi = kmalloc(sizeof(*fbi));
+	assert(fbi);
+	memset(fbi, 0, sizeof(*fbi));
 
-	ret = mbox_fb_alloc(fbi.width, fbi.height, fbi.depth, &pa, &fbi.sz,
-			    &fbi.pitch);
-	assert(ret == 0);
+	fbi->phy_width = fbi->virt_width = 1024;
+	fbi->phy_height = fbi->virt_height = 768;
+	fbi->depth = 24;
+
+	init_list_head(&wq);
+	memset(&ior, 0, sizeof(ior));
+	ior.wq = &wq;
+	ior.req = fbi;
+	ior.sz = sizeof(*fbi);
+	IOCTL(&ior, MBOX_IOCTL_FB_ALLOC, IOCTL_DIR_NONE);
+	ret = mbox_io(&ior);
+	assert(ret == IO_RET_PENDING);
+	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
 
 	/* Keep the size SECTION-aligned for ease in mapping. */
-	sz = ALIGN_UP(fbi.sz, 1024 * 1024);
+	sz = ALIGN_UP(fbi->sz, 1024 * 1024);
 	sz >>= SECTION_SIZE_SZ;
 
 	/* Restrict the size to max 4MB. */
 	assert(sz < 4);
 
-	r.va_start = fbi.addr;
-	r.pa_start = pa;
+	r.va_start = fb;
+	r.pa_start = fbi->addr;
 	r.n = sz;
 	r.mt = MT_NRM_WTNA;
 	r.ap = AP_SRW;
@@ -67,5 +89,5 @@ void fb_init()
 	ret = mmu_map(NULL, &r);
 	assert(ret == 0);
 
-	memset(fbi.addr, 0, fbi.sz);
+	memset(fb, 0, fbi->sz);
 }
