@@ -28,8 +28,8 @@ static struct irq irqs_hard[IRQ_HARD_MAX];
 static struct irq irqs_soft[IRQ_SOFT_MAX];
 static struct irq irqs_sched[IRQ_SCHED_MAX];
 
-static volatile uint32_t irq_soft_mask;
-static volatile uint32_t irq_sched_mask;
+static uint32_t irq_soft_mask;
+static uint32_t irq_sched_mask;
 
 int irq_sched()
 {
@@ -52,8 +52,8 @@ int irq_sched()
 		 * irq_sched() is called from the primary IRQ context.
 		 */
 
-		mask = irq_sched_mask;
-		irq_sched_mask = 0;
+		mask = *(volatile uint32_t *)&irq_sched_mask;
+		*(volatile uint32_t *)&irq_sched_mask = 0;
 
 		if (!mask)
 			break;
@@ -82,8 +82,8 @@ int irq_soft()
 
 	while (1) {
 		irq_disable();
-		mask = irq_soft_mask;
-		irq_soft_mask = 0;
+		mask = *(volatile uint32_t *)&irq_soft_mask;
+		*(volatile uint32_t *)&irq_soft_mask = 0;
 		irq_enable();
 
 		if (!mask)
@@ -107,8 +107,8 @@ int irq_hard()
 
 void irq_init()
 {
-	irq_soft_mask = 0;
-	irq_sched_mask = 0;
+	*(volatile uint32_t *)&irq_soft_mask = 0;
+	*(volatile uint32_t *)&irq_sched_mask = 0;
 }
 
 int irq_hard_insert(enum irq_hard ih, irq_fn fn, void *data)
@@ -157,20 +157,20 @@ int irq_sched_insert(enum irq_sched is, irq_fn fn, void *data)
  */
 void irq_soft_raise(enum irq_soft is)
 {
-	irq_soft_mask |= 1 << is;
+	*(volatile uint32_t *)&irq_soft_mask |= 1 << is;
 }
 
 void irq_soft_clear(enum irq_soft is)
 {
-	irq_soft_mask &= ~(1 << is);
+	*(volatile uint32_t *)&irq_soft_mask &= ~(1 << is);
 }
 
 void irq_sched_raise(enum irq_sched is)
 {
-	irq_sched_mask |= 1 << is;
+	*(volatile uint32_t *)&irq_sched_mask |= 1 << is;
 }
 
 void irq_sched_clear(enum irq_sched is)
 {
-	irq_sched_mask &= ~(1 << is);
+	*(volatile uint32_t *)&irq_sched_mask &= ~(1 << is);
 }
