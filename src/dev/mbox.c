@@ -65,6 +65,7 @@ struct mbox {
 static struct mbox *wo;
 static struct mbox *ro;
 
+_ctx_hard
 static int mbox_irq(void *data)
 {
 	data = data;
@@ -78,6 +79,7 @@ static int mbox_irq(void *data)
 }
 
 static void mbox_io_kick();
+_ctx_sched
 static int mbox_irq_sched(void *data)
 {
 	data = data;
@@ -93,6 +95,7 @@ static int mbox_irq_sched(void *data)
 	return 0;
 }
 
+_ctx_sched
 static void mbox_io_kick()
 {
 	int ch;

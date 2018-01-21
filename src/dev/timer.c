@@ -41,6 +41,7 @@ static uint32_t freq;
 static int ticks;
 
 /* Runs with IRQs disabled. */
+_ctx_hard
 static int timer_irq(void *data)
 {
 	data = data;
@@ -60,6 +61,7 @@ static int timer_irq(void *data)
 }
 
 /* Runs with IRQs enabled. */
+_ctx_soft
 static int timer_irq_soft(void *data)
 {
 	int lt;

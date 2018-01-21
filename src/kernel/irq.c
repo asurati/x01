@@ -31,6 +31,7 @@ static struct irq irqs_sched[IRQ_SCHED_MAX];
 static uint32_t irq_soft_mask;
 static uint32_t irq_sched_mask;
 
+_ctx_sched
 int irq_sched()
 {
 	int i, ret, ctx_change;
@@ -75,6 +76,7 @@ int irq_sched()
 /* Runs with interrupts enabled, but soft IRQs disabled (to prevent
  * recursive calls). */
 
+_ctx_soft
 int irq_soft()
 {
 	int i;
@@ -96,6 +98,7 @@ int irq_soft()
 	return 0;
 }
 
+_ctx_hard
 int irq_hard()
 {
 	int i, ret;
@@ -155,21 +158,26 @@ int irq_sched_insert(enum irq_sched is, irq_fn fn, void *data)
  *
  * Implement READ_ONCE and WRITE_ONCE.
  */
+_ctx_hard
 void irq_soft_raise(enum irq_soft is)
 {
 	*(volatile uint32_t *)&irq_soft_mask |= 1 << is;
 }
 
+_ctx_hard
 void irq_soft_clear(enum irq_soft is)
 {
 	*(volatile uint32_t *)&irq_soft_mask &= ~(1 << is);
 }
 
-void irq_sched_raise(enum irq_sched is)
+_ctx_soft
+void _ctx_hard irq_sched_raise(enum irq_sched is)
 {
 	*(volatile uint32_t *)&irq_sched_mask |= 1 << is;
 }
 
+_ctx_soft
+_ctx_hard
 void irq_sched_clear(enum irq_sched is)
 {
 	*(volatile uint32_t *)&irq_sched_mask &= ~(1 << is);

@@ -27,6 +27,8 @@ struct thread *current;
 static struct thread *idle;
 
 /* Runs under the timer's soft IRQ. */
+
+_ctx_soft
 void sched_timer_tick(int ticks)
 {
 	if (current == idle)
@@ -37,6 +39,7 @@ void sched_timer_tick(int ticks)
 		irq_sched_raise(IRQ_SCHED_SCHED);
 }
 
+_ctx_sched
 void sched_switch(void **ctx)
 {
 	struct thread *next;
@@ -64,6 +67,7 @@ void sched_switch(void **ctx)
 /* Can be called from schedule() or sched_irq(), with preemption
  * disabled.
  */
+_ctx_sched
 static int schedule_preempt_disabled()
 {
 	int empty;
@@ -194,6 +198,7 @@ void wake_up(struct list_head *wq)
 	preempt_enable();
 }
 
+_ctx_sched
 static int sched_irq(void *data)
 {
 	data = data;

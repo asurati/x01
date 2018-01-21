@@ -67,4 +67,9 @@ struct list_head {
 	struct list_head *next;
 };
 
+/* Tags to assign to the functions. */
+#define _ctx_hard
+#define _ctx_soft
+#define _ctx_sched
+#define _ctx_process
 #endif

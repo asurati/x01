@@ -38,6 +38,7 @@ void excpt_res() {loop();}
 void excpt_fiq() {loop();}
 
 /* Called with IRQs disabled. */
+_ctx_hard
 void excpt_irq()
 {
 	int depth;
