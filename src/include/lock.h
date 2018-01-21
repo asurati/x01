@@ -29,13 +29,19 @@ struct lock {
 	int value;
 };
 
-#define lock_irq_lock(x)		irq_disable()
-#define lock_irq_unlock(x)		irq_enable()
+#define lock_irq_lock(x)						\
+	do {(void)x; irq_hard_disable(); } while (0);
+#define lock_irq_unlock(x)						\
+	do {(void)x; irq_hard_enable(); } while (0);
 
-#define lock_irq_soft_lock(x)		irq_soft_disable()
-#define lock_irq_soft_unlock(x)		irq_soft_enable()
+#define lock_irq_soft_lock(x)						\
+	do {(void)x; irq_soft_disable(); } while (0);
+#define lock_irq_soft_unlock(x)						\
+	do {(void)x; irq_soft_enable(); } while (0);
 
-#define lock_sched_lock(x)		preeempt_disable()
-#define lock_sched_unlock(x)		preeempt_enable()
+#define lock_sched_lock(x)						\
+	do {(void)x; preempt_disable(); } while (0);
+#define lock_sched_unlock(x)						\
+	do {(void)x; preempt_enable(); } while (0);
 
 #endif
