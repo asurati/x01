@@ -101,15 +101,8 @@ static int mbox_irq(void *data)
 	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
 		/* Silence the interrupt by reading the RW field. */
 		readl(&ro->rw);
-		irq_soft_raise(IRQ_SOFT_MBOX);
+		irq_sched_raise(IRQ_SCHED_MBOX);
 	}
-	return 0;
-}
-
-static int mbox_irq_soft(void *data)
-{
-	data = data;
-	irq_sched_raise(IRQ_SCHED_MBOX);
 	return 0;
 }
 
@@ -198,7 +191,6 @@ void mbox_init()
 	assert(sizeof(struct mbox) == 0x20);
 
 	irq_hard_insert(IRQ_HARD_MBOX, mbox_irq, NULL);
-	irq_soft_insert(IRQ_SOFT_MBOX, mbox_irq_soft, NULL);
 	irq_sched_insert(IRQ_SCHED_MBOX, mbox_irq_sched, NULL);
 
 	/* QRPI2 supports raising interrupts when VC responds to
