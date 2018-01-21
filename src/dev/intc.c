@@ -49,7 +49,8 @@ void intc_init()
 
 	/* Enable MBOX interrupt. */
 	BF_SET(v, INTC_IRQ_MBOX, 1);
+#ifdef RPI
+	BF_SET(v, INTC_IRQ_STIMER, 1);
+#endif
 	writel(v, io_base + INTC_EN0);
-
-	/* TODO Enable STIMER interrupt on RPi1. */
 }

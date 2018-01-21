@@ -122,6 +122,10 @@ char timer_is_asserted()
 		return 0;
 }
 
+/* Writing TVAL deasserts the timer, since the non-zero
+ * TVAL value implies that the timer condition for firing
+ * under TVAL is not met.
+ */
 void timer_rearm(uint32_t freq)
 {
 	timer_reg_write(freq, TMR_TVAL);

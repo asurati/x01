@@ -19,3 +19,54 @@
 #include <io.h>
 #include <irq.h>
 #include <timer.h>
+
+#define TMR_BASE		0x3000
+
+#define TMR_CS			(TMR_BASE)
+#define TMR_CLO			(TMR_BASE + 0x4)
+#define TMR_CHI			(TMR_BASE + 0x8)
+#define TMR_C3			(TMR_BASE + 0x10)
+
+#define TMR_CS_M3_POS		3
+#define TMR_CS_M3_SZ		1
+
+/* System Timer runs at 1MHz. */
+uint32_t timer_freq()
+{
+	return 1000000;
+}
+
+/* The timer is free running. To disable it, disable the IRQ,
+ * and zero the comparator.
+ */
+void timer_disable()
+{
+	writel(0, io_base + TMR_C3);
+}
+
+void timer_enable()
+{
+}
+
+char timer_is_asserted()
+{
+	uint32_t v;
+	v = readl(io_base + TMR_CS);
+	if (BF_GET(v, TMR_CS_M3)) {
+		/* Deassert the signal. */
+		v = 0;
+		BF_SET(v, TMR_CS_M3, 1);
+		writel(v, io_base + TMR_CS);
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+void timer_rearm(uint32_t freq)
+{
+	uint32_t v;
+	v = readl(io_base + TMR_C3);
+	v += freq;
+	writel(v, io_base + TMR_C3);
+}
