@@ -23,7 +23,8 @@ enum mbox_property {
 	MBOX_PROP_MAX
 };
 
-void	mbox_init();
-int	mbox_fb_alloc(int width, int height, int depth, uintptr_t *addr,
-		      size_t *sz, int *pitch);
+void		mbox_init();
+int		mbox_fb_alloc(int width, int height, int depth,
+			      uintptr_t *addr, size_t *sz, int *pitch);
+uint32_t	mbox_uart_clk();
 #endif

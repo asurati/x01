@@ -66,17 +66,17 @@ struct mbox_tag {
 	uint32_t type;
 };
 
-struct mbox_tag_mac {
+struct mbox_tag_clk_rate {
 	struct mbox_tag hdr;
-	uint8_t addr[6];
-	uint8_t pad[2];
+	uint32_t id;
+	uint32_t rate;
 };
 
 struct mbox_prop_buf {
 	uint32_t sz;
 	uint32_t code;
 	union {
-		struct mbox_tag_mac mac;
+		struct mbox_tag_clk_rate clk_rate;
 	} u;
 	uint32_t end;
 };
@@ -106,9 +106,16 @@ static int mbox_irq(void *data)
 	return 0;
 }
 
+static int mbox_irq_soft(void *data)
+{
+	data = data;
+	irq_sched_raise(IRQ_SCHED_MBOX);
+	return 0;
+}
+
 /* Temporary hack before the IO manager is implemented. */
 static int signal;
-static int mbox_irq_soft(void *data)
+static int mbox_irq_sched(void *data)
 {
 	data = data;
 	signal = 1;
@@ -116,10 +123,27 @@ static int mbox_irq_soft(void *data)
 	return 0;
 }
 
+static void mbox_do_io(void *b, size_t sz, int ch)
+{
+	uintptr_t pa;
+
+	mmu_dcache_clean_inv(b, sz);
+
+	pa = mmu_va_to_pa(NULL, b);
+	assert(ALIGNED(pa, 16));
+	pa |= ch;
+
+	while (readl(&wo->status) & 0x80000000)
+		;
+
+	writel(pa, &wo->rw);
+	wait_event(&ioq, signal == 1);
+	signal = 0;
+}
+
 int mbox_fb_alloc(int width, int height, int depth, uintptr_t *addr,
 		  size_t *sz, int *pitch)
 {
-	uintptr_t pa;
 	struct mbox_fb_buf *b;
 
 	/* All kmalloc allocations > 8 are 16-byte aligned. */
@@ -130,20 +154,7 @@ int mbox_fb_alloc(int width, int height, int depth, uintptr_t *addr,
 	b->ph = b->vh = height;
 	b->depth = depth;
 
-	mmu_dcache_clean_inv(b, sizeof(*b));
-
-	pa = mmu_va_to_pa(NULL, b);
-	assert(ALIGNED(pa, 16));
-	pa |= MBOX_CH_FB;
-
-	while (readl(&wo->status) & 0x80000000)
-		;
-
-	writel(pa, &wo->rw);
-	wait_event(&ioq, signal == 1);
-
-	/* wait_event implies barriers. */
-	signal = 0;
+	mbox_do_io(b, sizeof(*b), MBOX_CH_FB);
 
 	/* TODO Check return parameters. */
 	*addr = b->addr;
@@ -152,6 +163,27 @@ int mbox_fb_alloc(int width, int height, int depth, uintptr_t *addr,
 
 	kfree(b);
 	return 0;
+}
+
+uint32_t mbox_uart_clk()
+{
+	uint32_t v;
+	struct mbox_prop_buf *b;
+
+	/* All kmalloc allocations > 8 are 16-byte aligned. */
+	b = kmalloc(sizeof(*b));
+	memset(b, 0, sizeof(*b));
+
+	b->sz = sizeof(*b);
+	b->u.clk_rate.hdr.id = 0x30002;
+	b->u.clk_rate.hdr.sz = 8;
+	b->u.clk_rate.id = 2;
+
+	mbox_do_io(b, sizeof(*b), MBOX_CH_PROP);
+	v = b->u.clk_rate.rate;
+
+	kfree(b);
+	return v;
 }
 
 void mbox_init()
@@ -165,8 +197,9 @@ void mbox_init()
 
 	assert(sizeof(struct mbox) == 0x20);
 
-	irq_insert(IRQ_HARD_MBOX, mbox_irq, NULL);
+	irq_hard_insert(IRQ_HARD_MBOX, mbox_irq, NULL);
 	irq_soft_insert(IRQ_SOFT_MBOX, mbox_irq_soft, NULL);
+	irq_sched_insert(IRQ_SCHED_MBOX, mbox_irq_sched, NULL);
 
 	/* QRPI2 supports raising interrupts when VC responds to
 	 * ARM's requests.
