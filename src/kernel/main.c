@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <mmu.h>
 #include <pm.h>
 #include <slub.h>
@@ -29,6 +30,7 @@
 #include <fb.h>
 #include <list.h>
 #include <string.h>
+#include <uart.h>
 
 static int display_thread(void *p)
 {
@@ -118,7 +120,12 @@ void kmain(const void *al)
 	/* Enable IRQs once hard and soft IRQs are setup. */
 	irq_enable();
 
+	/* The following init() calls require IRQs to be enabled,
+	 * since they involve IO to the MBOX.
+	 */
+
 	fb_init();
+	uart_init();
 
 	sched_thread_create(display_thread, NULL);
 

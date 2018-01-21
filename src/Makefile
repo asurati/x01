@@ -60,6 +60,7 @@ OBJS += kernel/main.o
 OBJS += dev/timer.o
 OBJS += dev/intc.o
 OBJS += dev/mbox.o
+OBJS += dev/uart.o
 ifeq ($(BOARD),QRPI2)
 OBJS += dev/timer_qrpi2.o
 else
