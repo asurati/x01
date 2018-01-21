@@ -28,6 +28,9 @@
 
 #define THRD_QUOTA			5
 
+#define	SCHED_RET_SWITCH		1
+#define	SCHED_RET_RUN			2
+
 /* thread.ticks: Accesses need sync with soft IRQs.
  * thread.state: Accesses need sync with scheduler.
  */
@@ -38,10 +41,10 @@ struct thread {
 	void *context;
 	char ticks;
 	char state;
+	char in_irq_ctx;
 	char res[2];
-	int preempt_disable_depth;
-	int irq_soft_disable_depth;
-	int irq_disable_depth;
+	int irq_soft_count;
+	int irq_sched_count;
 };
 
 extern struct thread *current;
@@ -59,6 +62,11 @@ struct context {
 		current->state = (s);					\
 	} while (0)
 
+#define set_current_irq_ctx(v)						\
+	do {								\
+		current->in_irq_ctx = v;				\
+	} while (0)
+
 /* Disable/Enable provide acquire/release semantics on
  * single processor alone. The effects of the
  * enable/disable operations are observed only on the
@@ -69,79 +77,64 @@ struct context {
  * accessed by multiple agents, hardware barriers are
  * required.
  */
-static inline void preempt_disable()
-{
-	*(volatile int *)(&current->preempt_disable_depth) += 1;
-	barrier();
-}
 
-static inline void preempt_enable()
+static inline int irq_soft_disable()
 {
+	*(volatile int *)(&current->irq_soft_count) += 1;
 	barrier();
-	*(volatile int *)(&current->preempt_disable_depth) -= 1;
-}
-
-static inline int preempt_depth()
-{
-	return *(volatile int *)(&current->preempt_disable_depth);
-}
-
-static inline void irq_soft_disable()
-{
-	*(volatile int *)(&current->irq_soft_disable_depth) += 1;
-	barrier();
+	return *(volatile int *)(&current->irq_soft_count);
 }
 
 static inline void irq_soft_enable()
 {
+	int v;
+	extern int irq_soft();
+
 	barrier();
-	*(volatile int *)(&current->irq_soft_disable_depth) -= 1;
+	v = *(volatile int *)(&current->irq_soft_count);
+
+	if (!current->in_irq_ctx && v == 1)
+		irq_soft();
+
+	*(volatile int *)(&current->irq_soft_count) -= 1;
 }
 
-static inline int irq_soft_depth()
+static inline int irq_sched_disable()
 {
-	return *(volatile int *)(&current->irq_soft_disable_depth);
-}
-
-/* These irq routines are meant to be called from excpt.S only.
- * They are called with IRQs disabled. */
-static inline void irq_enter()
-{
-	*(volatile int *)(&current->irq_disable_depth) += 1;
+	*(volatile int *)(&current->irq_sched_count) += 1;
 	barrier();
+	return *(volatile int *)(&current->irq_sched_count);
 }
 
-static inline void irq_exit()
+static inline void irq_sched_enable()
 {
+	int v;
+	extern int irq_sched();
+
 	barrier();
-	*(volatile int *)(&current->irq_disable_depth) -= 1;
+	v = *(volatile int *)(&current->irq_sched_count);
+	if (!current->in_irq_ctx && v == 1)
+		irq_sched();
+
+	*(volatile int *)(&current->irq_sched_count) -= 1;
 }
 
-static inline int irq_depth()
-{
-	return *(volatile int *)(&current->irq_disable_depth);
-}
-
-/* Disabling soft IRQs imply disabling preemption. */
-static inline int preempt_disabled()
-{
-	return (irq_depth() > 0) ||
-		(irq_soft_depth() > 0) ||
-		(preempt_depth() > 0);
-}
+#define preempt_disable()		irq_sched_disable()
+#define preempt_enable()		irq_sched_enable()
 
 #define wait_event(wq, cond)						\
 	do {								\
 		preempt_disable();					\
+		if (cond) {						\
+			preempt_enable();				\
+			break;						\
+		}							\
 		set_current_state(THRD_STATE_WAITING);			\
 		list_add_tail(&current->entry, (wq));			\
-		while (!(cond)) {					\
-			preempt_enable();				\
-			schedule();					\
-			preempt_disable();				\
-		}							\
-		set_current_state(THRD_STATE_RUNNING);			\
 		preempt_enable();					\
+		while (!(cond)) {					\
+			schedule();					\
+		}							\
 	} while (0)
 
 typedef int (*thread_fn)(void *p);
@@ -150,5 +143,5 @@ void		sched_init();
 void		sched_timer_tick();
 struct thread	*sched_thread_create(thread_fn fn, void *p);
 void		wake_up(struct list_head *wq);
-void		schedule();
+int		schedule();
 #endif

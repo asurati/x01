@@ -29,21 +29,8 @@ struct thread *current;
 void sched_timer_tick(int ticks)
 {
 	current->ticks -= ticks;
-}
-
-int sched_quota_consumed()
-{
-	int ret;
-
-	ret = 0;
-
-	/* Sync with the timer soft IRQ. */
-	irq_soft_disable();
 	if (current->ticks <= 0)
-		ret = 1;
-	irq_soft_enable();
-
-	return ret;
+		irq_sched_raise(IRQ_SCHED_SCHED);
 }
 
 void sched_switch(void **ctx)
@@ -62,31 +49,26 @@ void sched_switch(void **ctx)
 	 * The barrier within the soft IRQ lock ensures that the changes
 	 * are visible in the correct order.
 	 */
-	irq_soft_disable();
 	current = next;
-	irq_soft_enable();
 }
 
-/* Can be called from schedule() or from excpt.S. */
-static void schedule_preempt_disabled()
+/* Can be called from schedule() or sched_irq(), with preemption
+ * disabled.
+ */
+static int schedule_preempt_disabled()
 {
 	void *ctx;
 	struct list_head *e;
 	struct thread *next;
 	extern void *_schedule(void **, void **);
 
-	if (current->state == THRD_STATE_WAKING)
-		return;
-
 	if (list_empty(&ready)) {
-		irq_soft_disable();
 		/* If this was a voluntary schedule and no ready
 		 * thread was found, do not reset the quota.
 		 */
 		if (current->ticks <= 0)
 			current->ticks = THRD_QUOTA;
-		irq_soft_enable();
-		return;
+		return SCHED_RET_RUN;
 	}
 
 	e = ready.next;
@@ -103,8 +85,10 @@ static void schedule_preempt_disabled()
 	/* Because of the soft IRQ, the ready current thread may
 	 * continue accumulating ticks.
 	 */
-	if (current->state == THRD_STATE_READY)
+	if (current->state == THRD_STATE_RUNNING) {
+		current->state = THRD_STATE_READY;
 		list_add_tail(&current->entry, &ready);
+	}
 
 	/* Pass the pointer to the context field so that
 	 * _schedule can save the stack pointer to the context frame
@@ -119,15 +103,19 @@ static void schedule_preempt_disabled()
 	 * call to _schedule. Those values are stale.
 	 */
 	sched_switch(ctx);
+	return SCHED_RET_SWITCH;
 }
 
 /* Preemption must be enabled when schedule is called. */
-void schedule()
+int schedule()
 {
-	preempt_disable();
-	assert(preempt_depth() == 1);
-	schedule_preempt_disabled();
+	int ret;
+
+	ret = preempt_disable();
+	assert(ret == 1);
+	ret = schedule_preempt_disabled();
 	preempt_enable();
+	return ret;
 }
 
 void wake_up(struct list_head *wq)
@@ -141,27 +129,25 @@ void wake_up(struct list_head *wq)
 		list_del(e);
 
 		t = list_entry(e, struct thread, entry);
-		t->state = THRD_STATE_WAKING;
-		list_add_tail(e, &ready);
+		assert(t->state == THRD_STATE_WAITING);
+		/* t == current is possible when the ready queue is empty.
+		 * When the queue is empty, the current thread, though
+		 * marked as waiting on a wait queue, is allowed to run
+		 */
+		if (t == current) {
+			t->state = THRD_STATE_RUNNING;
+		} else {
+			t->state = THRD_STATE_READY;
+			list_add_tail(e, &ready);
+		}
 	}
 	preempt_enable();
 }
 
-void sched_init()
+static int sched_irq(void *data)
 {
-	extern char stack_hi;
-	struct thread *t;
-
-	init_list_head(&ready);
-
-	t = kmalloc(sizeof(*t));
-	memset(t, 0, sizeof(*t));
-
-	t->ticks = THRD_QUOTA;
-	t->state = THRD_STATE_RUNNING;
-	t->svc_stack_hi = &stack_hi;
-
-	current = t;
+	data = data;
+	return schedule_preempt_disabled();
 }
 
 struct thread *sched_thread_create(thread_fn fn, void *data)
@@ -188,4 +174,22 @@ struct thread *sched_thread_create(thread_fn fn, void *data)
 	preempt_enable();
 
 	return t;
+}
+
+void sched_init()
+{
+	extern char stack_hi;
+	struct thread *t;
+
+	init_list_head(&ready);
+	irq_sched_insert(IRQ_SCHED_SCHED, sched_irq, NULL);
+
+	t = kmalloc(sizeof(*t));
+	memset(t, 0, sizeof(*t));
+
+	t->ticks = THRD_QUOTA;
+	t->state = THRD_STATE_RUNNING;
+	t->svc_stack_hi = &stack_hi;
+
+	current = t;
 }

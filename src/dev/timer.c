@@ -85,7 +85,7 @@ void timer_init()
 
 	timer_disable();
 
-	irq_insert(IRQ_HARD_TIMER, timer_irq, NULL);
+	irq_hard_insert(IRQ_HARD_TIMER, timer_irq, NULL);
 	irq_soft_insert(IRQ_SOFT_TIMER, timer_irq_soft, NULL);
 
 	freq = timer_freq();

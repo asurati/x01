@@ -17,6 +17,7 @@
 
 #include <assert.h>
 #include <irq.h>
+#include <sched.h>
 
 struct irq {
 	irq_fn fn;
@@ -25,8 +26,51 @@ struct irq {
 
 static struct irq irqs_hard[IRQ_HARD_MAX];
 static struct irq irqs_soft[IRQ_SOFT_MAX];
+static struct irq irqs_sched[IRQ_SCHED_MAX];
 
 static volatile uint32_t irq_soft_mask;
+static volatile uint32_t irq_sched_mask;
+
+int irq_sched()
+{
+	int i, ret, ctx_change;
+	uint32_t mask;
+
+	ctx_change = 0;
+	while (1) {
+		/* Do not process if we are waking up from a schedule()
+		 * switch.
+		 */
+		if (ctx_change)
+			break;
+
+		/* Disabling soft IRQs is not necessary since the function
+		 * is called from the primary IRQ context which ensures that
+		 * no soft IRQs can run and modify the mask while the primary
+		 * context itself is running.
+		 *
+		 * irq_sched() is called from the primary IRQ context.
+		 */
+
+		mask = irq_sched_mask;
+		irq_sched_mask = 0;
+
+		if (!mask)
+			break;
+
+		for (i = 0; i < IRQ_SCHED_MAX && mask; ++i, mask >>= 1)
+			if ((mask & 1) && irqs_sched[i].fn) {
+				ret = irqs_sched[i].fn(irqs_sched[i].data);
+				if (i != IRQ_SCHED_SCHED)
+					continue;
+				if (ret != SCHED_RET_SWITCH)
+					continue;
+				ctx_change = 1;
+				break;
+			}
+	}
+	return 0;
+}
 
 /* Runs with interrupts enabled, but soft IRQs disabled (to prevent
  * recursive calls). */
@@ -46,7 +90,7 @@ int irq_soft()
 			break;
 
 		for (i = 0; i < IRQ_SOFT_MAX && mask; ++i, mask >>= 1)
-			if (mask & 1)
+			if ((mask & 1) && irqs_soft[i].fn)
 				irqs_soft[i].fn(irqs_soft[i].data);
 	}
 	return 0;
@@ -64,9 +108,10 @@ int irq_hard()
 void irq_init()
 {
 	irq_soft_mask = 0;
+	irq_sched_mask = 0;
 }
 
-int irq_insert(enum irq_hard ih, irq_fn fn, void *data)
+int irq_hard_insert(enum irq_hard ih, irq_fn fn, void *data)
 {
 	assert(ih < IRQ_HARD_MAX);
 	assert(irqs_hard[ih].fn == NULL);
@@ -88,6 +133,17 @@ int irq_soft_insert(enum irq_soft is, irq_fn fn, void *data)
 	return 0;
 }
 
+int irq_sched_insert(enum irq_sched is, irq_fn fn, void *data)
+{
+	assert(is < IRQ_SCHED_MAX);
+	assert(irqs_sched[is].fn == NULL);
+
+	irqs_sched[is].fn = fn;
+	irqs_sched[is].data = data;
+
+	return 0;
+}
+
 /* If the compiler determines that the raise and clear calls
  * can be optimized out (at the call site), events may be los.
  * irq_soft_mask needs to be volatile to prevent that from
@@ -96,6 +152,8 @@ int irq_soft_insert(enum irq_soft is, irq_fn fn, void *data)
  * Change orr/bic to add/sub, remove volatile and call
  * raise and clear passing the same value as parameter.
  * The compiler optimizes away the raise and clear.
+ *
+ * Implement READ_ONCE and WRITE_ONCE.
  */
 void irq_soft_raise(enum irq_soft is)
 {
@@ -105,4 +163,14 @@ void irq_soft_raise(enum irq_soft is)
 void irq_soft_clear(enum irq_soft is)
 {
 	irq_soft_mask &= ~(1 << is);
+}
+
+void irq_sched_raise(enum irq_sched is)
+{
+	irq_sched_mask |= 1 << is;
+}
+
+void irq_sched_clear(enum irq_sched is)
+{
+	irq_sched_mask &= ~(1 << is);
 }

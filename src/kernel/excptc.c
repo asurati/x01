@@ -40,31 +40,46 @@ void excpt_fiq() {loop();}
 /* Called with IRQs disabled. */
 void excpt_irq()
 {
+	int depth;
 	extern int irq_hard();
 	extern int irq_soft();
-	extern int sched_quota_consumed();
-	extern void schedule();
-
-	irq_enter();
+	extern int irq_sched();
 
 	irq_hard();
 
-	irq_enable();
+	depth = irq_soft_disable();
 
-	if (irq_depth() > 1 || irq_soft_depth() > 0)
-		goto irq_done;
+	/* Within a recursive context, or soft IRQs disabled
+	 * by the thread.
+	 */
+	if (depth > 1)
+		goto irq_no_soft;
+
+	set_current_irq_ctx(1);
+	/* Within the primary IRQ context, with soft IRQs enabled. */
+	irq_enable();
 
 	irq_soft();
 
-	if (preempt_depth() == 0 && sched_quota_consumed()) {
-		set_current_state(THRD_STATE_READY);
-		schedule();
-		set_current_state(THRD_STATE_RUNNING);
-	}
+	/* Do not enable soft IRQs yet, else recursive contexts will
+	 * end up calling irq_soft() while primary context is still
+	 * within excpt_irq().
+	 */
 
-irq_done:
+	depth = irq_sched_disable();
+
+	/* Within the primary IRQ countext, with sched IRQs disabled. */
+	if (depth > 1)
+		goto irq_no_sched;
+
+	irq_sched();
+
+irq_no_sched:
+	irq_sched_enable();
 	irq_disable();
-	irq_exit();
+	set_current_irq_ctx(0);
+irq_no_soft:
+	irq_soft_enable();
 }
 
 void excpt_init()

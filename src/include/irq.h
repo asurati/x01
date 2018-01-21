@@ -33,6 +33,13 @@ enum irq_soft {
 	IRQ_SOFT_MAX
 };
 
+enum irq_sched {
+	IRQ_SCHED_TIMER,
+	IRQ_SCHED_MBOX,
+	IRQ_SCHED_SCHED,
+	IRQ_SCHED_MAX
+};
+
 /* Since IRQ enable/disable are used for synchronization,
  * rovide memory ordering.
  *
@@ -60,8 +67,11 @@ static inline void irq_disable()
 typedef int (*irq_fn)(void *data);
 
 void	irq_init();
-int	irq_insert(enum irq_hard ih, irq_fn fn, void *data);
+int	irq_hard_insert(enum irq_hard ih, irq_fn fn, void *data);
 int	irq_soft_insert(enum irq_soft is, irq_fn fn, void *data);
+int	irq_sched_insert(enum irq_sched is, irq_fn fn, void *data);
 void	irq_soft_raise(enum irq_soft is);
 void	irq_soft_clear(enum irq_soft is);
+void	irq_sched_raise(enum irq_sched is);
+void	irq_sched_clear(enum irq_sched is);
 #endif
