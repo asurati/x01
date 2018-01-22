@@ -25,6 +25,7 @@
 #define THRD_STATE_READY		2
 #define THRD_STATE_WAITING		3
 #define THRD_STATE_WAKING		4
+#define THRD_STATE_MUTEX_WAITING	5
 
 #define THRD_QUOTA			5
 

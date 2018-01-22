@@ -21,6 +21,7 @@
 #include <sched.h>
 #include <slub.h>
 #include <string.h>
+#include <mutex.h>
 
 static struct list_head ready;
 struct thread *current;
@@ -168,12 +169,11 @@ int schedule()
 	return ret;
 }
 
-void wake_up(struct list_head *wq)
+void wake_up_preempt_disabled(struct list_head *wq)
 {
 	struct list_head *e;
 	struct thread *t;
 
-	preempt_disable();
 	while (!list_empty(wq)) {
 		e = wq->next;
 		list_del(e);
@@ -183,7 +183,8 @@ void wake_up(struct list_head *wq)
 		assert(t != idle);
 		assert(current != idle);
 
-		assert(t->state == THRD_STATE_WAITING);
+		assert(t->state == THRD_STATE_WAITING ||
+		       t->state == THRD_STATE_MUTEX_WAITING);
 		/* t == current is possible when the ready queue is empty.
 		 * When the queue is empty, the current thread, though
 		 * marked as waiting on a wait queue, is allowed to run
@@ -195,6 +196,12 @@ void wake_up(struct list_head *wq)
 			list_add_tail(e, &ready);
 		}
 	}
+}
+
+void wake_up(struct list_head *wq)
+{
+	preempt_disable();
+	wake_up_preempt_disabled(wq);
 	preempt_enable();
 }
 
@@ -236,9 +243,37 @@ static int sched_idle(void *data)
 	data = data;
 
 	while (1)
-		asm volatile("wfe");
+		asm volatile("wfi");
 
 	return 0;
+}
+
+void mutex_init(struct mutex *m)
+{
+	init_list_head(&m->wq);
+}
+
+void mutex_lock(struct mutex *m)
+{
+	preempt_disable();
+	while (m->lock == 1) {
+		set_current_state(THRD_STATE_MUTEX_WAITING);
+		list_add_tail(&current->entry, &m->wq);
+		preempt_enable();
+		schedule();
+		preempt_disable();
+	}
+	m->lock = 1;
+	preempt_enable();
+}
+
+void mutex_unlock(struct mutex *m)
+{
+	preempt_disable();
+	m->lock = 0;
+	barrier();
+	wake_up_preempt_disabled(&m->wq);
+	preempt_enable();
 }
 
 void sched_init()
