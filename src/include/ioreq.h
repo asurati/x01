@@ -58,6 +58,7 @@ struct io_req {
 	struct list_head entry;
 	int flags;
 	int ret;
+	void *drv_data;	/* For driver's use. */
 	void *req;
 	size_t sz;
 	union {

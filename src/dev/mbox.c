@@ -78,7 +78,7 @@ static int mbox_irq(void *data)
 	return 0;
 }
 
-static void mbox_io_kick();
+static void mbox_io_process();
 _ctx_sched
 static int mbox_irq_sched(void *data)
 {
@@ -90,26 +90,22 @@ static int mbox_irq_sched(void *data)
 	 * has been signalled.
 	 */
 	req_pending = NULL;
-	if (io_pending)
-		mbox_io_kick();
+	if (io_pending) {
+		--io_pending;
+		mbox_io_process(list_del_head(&ioq));
+	}
 	return 0;
 }
 
 _ctx_sched
-static void mbox_io_kick()
+static void mbox_io_process(struct list_head *e)
 {
 	int ch;
 	uintptr_t pa;
-	struct list_head *e;
-
-	lock_sched_lock(&ioq_lock);
-	assert(!list_empty(&ioq));
-	e = list_del_head(&ioq);
-	--io_pending;
-	lock_sched_unlock(&ioq_lock);
 
 	assert(req_pending == NULL);
 	req_pending = list_entry(e, struct io_req, entry);
+
 	/* Error error checking. */
 	if (BF_GET(req_pending->u.ioctl.code, IOCTL_CODE) ==
 	    MBOX_IOCTL_UART_CLOCK)
@@ -117,11 +113,9 @@ static void mbox_io_kick()
 	else
 		ch = MBOX_CH_FB;
 
-
 	mmu_dcache_clean_inv(req_pending->req, req_pending->sz);
 
-	pa = mmu_va_to_pa(NULL, req_pending->req);
-	assert(ALIGNED(pa, 16));
+	pa = (uintptr_t)req_pending->drv_data;
 	pa |= ch;
 
 	barrier();
@@ -129,29 +123,31 @@ static void mbox_io_kick()
 	while (readl(&wo->status) & 0x80000000)
 		;
 
+	/* Trigger the IO. */
 	writel(pa, &wo->rw);
 }
-
 
 /* Process context only. */
 int mbox_io(struct io_req *r)
 {
-	int kick;
+	uintptr_t pa;
 
 	BF_SET(r->flags, IORF_DONE, 0);
 	r->ret = 0;
 
-	kick = 0;
+	/* va_to_pa must be called in the process context. */
+	pa = mmu_va_to_pa(r->req);
+	assert(ALIGNED(pa, 16));
+	r->drv_data = (void *)pa;
 
 	lock_sched_lock(&ioq_lock);
-	list_add_tail(&r->entry, &ioq);
-	++io_pending;
-	if (io_pending == 1)
-		kick = 1;
+	if (io_pending == 0) {
+		mbox_io_process(&r->entry);
+	} else {
+		list_add_tail(&r->entry, &ioq);
+		++io_pending;
+	}
 	lock_sched_unlock(&ioq_lock);
-
-	if (kick)
-		mbox_io_kick();
 
 	return IO_RET_PENDING;
 }
