@@ -19,10 +19,12 @@
 #include <pm.h>
 #include <mmu.h>
 #include <string.h>
+#include <mutex.h>
 
 extern char KMODE_VA;
 extern char pt_start;
 extern char k_pd_start;
+static struct mutex k_pd_lock;
 
 const uintptr_t kmode_va = (uintptr_t)&KMODE_VA;
 const uintptr_t pt_area_va = (uintptr_t)&pt_start;
@@ -115,6 +117,8 @@ void mmu_init()
 	BF_PUSH(te, PTE_SP_BASE, pa);
 	pt[0] = te;
 	mmu_dcache_clean(pt, sizeof(uintptr_t));
+
+	mutex_init(&k_pd_lock);
 }
 
 int mmu_map(const struct mmu_map_req *r)
@@ -130,6 +134,7 @@ int mmu_map(const struct mmu_map_req *r)
 	assert(r->ap < AP_MAX);
 	assert(r->mu < MAP_UNIT_MAX);
 
+	mutex_lock(&k_pd_lock);
 	pd = (uintptr_t *)&k_pd_start;
 
 	/* The addresses must be aligned corresponding to the unit
@@ -242,8 +247,10 @@ int mmu_map(const struct mmu_map_req *r)
 				tr.mt = MT_NRM_WBA;
 				tr.ap = AP_SRW;
 				tr.mu = MAP_UNIT_PAGE;
+				mutex_unlock(&k_pd_lock);
 				ret = mmu_map(&tr);
 				assert(ret == 0);
+				mutex_lock(&k_pd_lock);
 				memset(tr.va_start, 0, PAGE_SIZE);
 
 				for (k = 0; k < 4; ++k) {
@@ -292,6 +299,7 @@ int mmu_map(const struct mmu_map_req *r)
 			mmu_dcache_clean(pt, n * sizeof(uintptr_t));
 		}
 	}
+	mutex_unlock(&k_pd_lock);
 	return 0;
 }
 
