@@ -22,6 +22,7 @@
 #include <string.h>
 #include <list.h>
 #include <vm.h>
+#include <mutex.h>
 
 #define SLUB_NSIZES		24
 #define SLUB_SUBPAGE_NSIZES	 9
@@ -64,6 +65,9 @@ struct slab {
 	void *p;
 };
 
+/* Coarse lock for all slabs. TODO: Implement finer locks. */
+struct mutex slub_lock;
+
 /* This variable is used to monitor the usage of the 16byte slabs.
  * If the number of free items are quite less, we need to use one
  * of them to allocate a struct slab to avoid deadlock of
@@ -93,6 +97,8 @@ void slub_init()
 	uintptr_t pa[SLUB_SUBPAGE_NSIZES], t;
 	void *va[SLUB_SUBPAGE_NSIZES];
 	extern char vm_slub_start;
+
+	mutex_init(&slub_lock);
 
 	assert(sizeof(struct slab) == 16);
 
@@ -198,7 +204,10 @@ void *kmalloc_page(int ix)
 	void *p;
 	uintptr_t pa;
 	struct mmu_map_req r;
-	/* For now, only allocate single page. */
+
+	/* For now, only allocate single page. We also
+	 * need to track the allocations to support kfree().
+	 */
 	assert(ix == 9);
 
 	ret = vm_alloc(VMA_SLUB, VM_UNIT_PAGE, 1, &p);
@@ -243,6 +252,8 @@ void *kmalloc(size_t sz)
 		return kmalloc_page(i);
 
 	/* subpage allocations. */
+
+	mutex_lock(&slub_lock);
 
 	shft = SLUB_ALLOC_SIZES_SZ + i;
 	n = PAGE_SIZE >> shft;
@@ -299,6 +310,7 @@ void *kmalloc(size_t sz)
 	}
 
 	assert(p);
+	mutex_unlock(&slub_lock);
 	return p;
 }
 
@@ -313,7 +325,7 @@ void kfree(void *p)
 	/* The struct page for the pointer p must have SLUB_LEADER set in va,
 	 * and PGF_USE_SLUB set in flags.
 	 */
-	pa = mmu_va_to_pa(NULL, p);
+	pa = mmu_va_to_pa(p);
 	assert(pa != 0xffffffff);
 
 	pg = pm_ram_get_page(pa);
@@ -335,11 +347,12 @@ void kfree(void *p)
 	shft = SLUB_ALLOC_SIZES_SZ + i;
 	n = PAGE_SIZE >> shft;
 
-	/* The slab->p must be a single page for subpage allocations. */
-	assert(s->p <= p && p < s->p + PAGE_SIZE);
-
 	/* The pointer p must be appropriately aligned. */
 	assert(((uintptr_t)p & (slub_alloc_sizes[i] - 1)) == 0);
+
+	mutex_lock(&slub_lock);
+	/* The slab->p must be a single page for subpage allocations. */
+	assert(s->p <= p && p < s->p + PAGE_SIZE);
 
 	j = p - s->p;
 	j >>= shft;
@@ -364,4 +377,5 @@ void kfree(void *p)
 		list_del(e);
 		list_add(e, nh);
 	}
+	mutex_unlock(&slub_lock);
 }

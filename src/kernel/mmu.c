@@ -24,6 +24,10 @@
 extern char KMODE_VA;
 extern char pt_start;
 extern char k_pd_start;
+/* Since a mutex is being used to protect k_pd, the callers of
+ * map/unmap/va_to_pa routines must ensure that they are running
+ * at process context.
+ */
 static struct mutex k_pd_lock;
 
 const uintptr_t kmode_va = (uintptr_t)&KMODE_VA;
@@ -312,6 +316,7 @@ int mmu_unmap(const struct mmu_map_req *r)
 	assert(r && r->n > 0);
 	assert(r->mu < MAP_UNIT_MAX);
 
+	mutex_lock(&k_pd_lock);
 	pd = (uintptr_t *)&k_pd_start;
 
 	/* The addresses must be aligned corresponding to the unit
@@ -385,17 +390,18 @@ int mmu_unmap(const struct mmu_map_req *r)
 			mmu_dcache_clean(pt, n * sizeof(uintptr_t));
 		}
 	}
+	mutex_unlock(&k_pd_lock);
 	return 0;
 }
 
-uintptr_t mmu_va_to_pa(const void *_pd, const void *p)
+uintptr_t mmu_va_to_pa(const void *p)
 {
 	int i, j;
-	const uintptr_t *pd = _pd;
+	const uintptr_t *pd;
 	uintptr_t va, tva, pa, *pt;
 
-	if (_pd == NULL)
-		pd = (uintptr_t *)&k_pd_start;
+	mutex_lock(&k_pd_lock);
+	pd = (uintptr_t *)&k_pd_start;
 
 	tva = (uintptr_t)p;
 	va = ALIGN_DN(tva, PAGE_SIZE);
@@ -413,7 +419,7 @@ uintptr_t mmu_va_to_pa(const void *_pd, const void *p)
 			pa = BF_PULL(pd[i], PDE_SS_BASE);
 			pa += tva & ~BF_SMASK(PDE_SS_BASE);
 		}
-		return pa;
+		goto exit;
 	}
 
 	/* Since the VA is mapped through a page table, we can assume that
@@ -429,5 +435,7 @@ uintptr_t mmu_va_to_pa(const void *_pd, const void *p)
 		pa = BF_PULL(pt[0], PTE_SP_BASE);
 		pa += tva & (~BF_SMASK(PTE_SP_BASE));
 	}
+exit:
+	mutex_unlock(&k_pd_lock);
 	return pa;
 }

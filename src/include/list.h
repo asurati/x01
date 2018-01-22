@@ -34,7 +34,7 @@ void	list_add(struct list_head *n, struct list_head *head);
 void	list_add_tail(struct list_head *n, struct list_head *head);
 void	list_del(struct list_head *e);
 struct list_head
-*list_del_head(struct list_head *head);
+	*list_del_head(struct list_head *head);
 typedef int (*fn_list_cmp)(struct list_head *a, struct list_head *b);
 void	ist_add_sorted(struct list_head *n, struct list_head *head,
 		       fn_list_cmp cmp);

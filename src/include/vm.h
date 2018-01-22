@@ -23,7 +23,6 @@
 
 enum vm_area {
 	VMA_SLUB,
-	VMA_DEV,
 	VMA_MAX
 };
 

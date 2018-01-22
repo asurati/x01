@@ -19,9 +19,11 @@
 #include <mmu.h>
 #include <pm.h>
 #include <string.h>
+#include <mutex.h>
 
 static struct bdy bdy_ram;
 static struct page *ram_map;
+static struct mutex ram_map_lock;
 static size_t ramsz;
 
 static int	_pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa);
@@ -50,6 +52,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 		{(uintptr_t)&ptab_start,	(uintptr_t)&ptab_end},
 	};
 
+	mutex_init(&ram_map_lock);
 	ramsz = _ramsz;
 
 
@@ -170,9 +173,10 @@ int pm_ram_alloc(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 	uintptr_t t;
 	struct page *pg;
 
+	mutex_lock(&ram_map_lock);
 	ret = _pm_ram_alloc(unit, n, pa);
 	if (ret)
-		return ret;
+		goto exit;
 
 	for (i = 0; i < n; ++i) {
 		t = pa[i] >> PAGE_SIZE_SZ;
@@ -186,7 +190,8 @@ int pm_ram_alloc(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 				atomic_set(&ram_map[t + j].u0.ref, 1);
 		}
 	}
-
+exit:
+	mutex_unlock(&ram_map_lock);
 	return ret;
 }
 
@@ -200,6 +205,7 @@ int pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 
 	assert(unit < PM_UNIT_MAX);
 
+	mutex_lock(&ram_map_lock);
 	mask = (1 << unit) - 1;
 	for (i = 0; i < n; ++i) {
 		/*
@@ -252,13 +258,20 @@ int pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 			atomic_set(&ram_map[p + j].u0.ref, 0);
 	}
 
+	mutex_unlock(&ram_map_lock);
 	ret = 0;
 	return ret;
 }
 
+/* TODO: Reference counting. */
 struct page *pm_ram_get_page(uintptr_t pa)
 {
+	struct page *pg;
+
 	assert(pa < ramsz);
 	pa >>= PAGE_SIZE_SZ;
-	return &ram_map[pa];
+	mutex_lock(&ram_map_lock);
+	pg = &ram_map[pa];
+	mutex_unlock(&ram_map_lock);
+	return pg;
 }

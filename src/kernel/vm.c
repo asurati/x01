@@ -19,30 +19,33 @@
 #include <slub.h>
 #include <string.h>
 #include <vm.h>
+#include <mutex.h>
 
 #define VM_AREA_SIZE	(128 * 1024 * 1024)
 
 /* For now, the vm calls support allocation and deallocation within the
- * two 128MB regions starting at vm_slub_start and vm_dev_start
+ * two 128MB region starting at vm_slub_start.
  */
 
-extern char vm_slub_start, vm_dev_start;
+extern char vm_slub_start;
 
 /* Same order as enum vm_area. */
 static void *vm_area_start[] = {
 	&vm_slub_start,
-	&vm_dev_start
 };
 
 static struct list_head vm_areas[VMA_MAX];
+static struct mutex vm_areas_lock[VMA_MAX];
 
 void vm_init()
 {
 	int i;
 	struct vm_seg *slabs;
 
-	for (i = 0; i < VMA_MAX; ++i)
+	for (i = 0; i < VMA_MAX; ++i) {
 		init_list_head(&vm_areas[i]);
+		mutex_init(&vm_areas_lock[i]);
+	}
 
 	/* The first 9 pages of vm_slub area are utilized as slabs. */
 	slabs = kmalloc(sizeof(*slabs));
@@ -110,6 +113,7 @@ int vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 	 * memory
 	 */
 
+	mutex_lock(&vm_areas_lock[area]);
 	for (i = 0; i < n; ++i) {
 		va[i] = vm_find_free(area, unit);
 		assert(va[i]);
@@ -118,6 +122,7 @@ int vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 		BF_SET(seg->flags, VSF_NPAGES, 1 << unit);
 		list_add(&seg->entry, &vm_areas[area]);
 	}
+	mutex_unlock(&vm_areas_lock[area]);
 
 	/* TODO free all and return error if at least one allocation
 	 * failed
