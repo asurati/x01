@@ -26,6 +26,7 @@
 static struct list_head ready;
 struct thread *current;
 static struct thread *idle;
+static struct thread _current;
 
 /* Runs under the timer's soft IRQ. */
 
@@ -265,6 +266,8 @@ void mutex_lock(struct mutex *m)
 	}
 	m->lock = 1;
 	preempt_enable();
+
+	/* preempt_enable() provides release semantics. */
 }
 
 void mutex_unlock(struct mutex *m)
@@ -276,22 +279,25 @@ void mutex_unlock(struct mutex *m)
 	preempt_enable();
 }
 
-void sched_init()
+void sched_current_init()
 {
 	extern char stack_hi;
 	struct thread *t;
 
-	init_list_head(&ready);
-	irq_sched_insert(IRQ_SCHED_SCHED, sched_irq, NULL);
+	t = &_current;
 
-	t = kmalloc(sizeof(*t));
 	memset(t, 0, sizeof(*t));
 
 	t->ticks = THRD_QUOTA;
 	t->state = THRD_STATE_RUNNING;
 	t->svc_stack_hi = &stack_hi;
-
 	current = t;
+}
+
+void sched_init()
+{
+	init_list_head(&ready);
+	irq_sched_insert(IRQ_SCHED_SCHED, sched_irq, NULL);
 
 	idle = sched_thread_create(sched_idle, NULL);
 }

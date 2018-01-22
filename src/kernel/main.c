@@ -107,6 +107,7 @@ void kmain(const void *al)
 		p += p[0];
 	}
 
+	sched_current_init();
 	mmu_init();
 	pm_init(ram, ramsz);
 	slub_init();

@@ -141,6 +141,7 @@ static inline void irq_sched_enable()
 typedef int (*thread_fn)(void *p);
 
 void		sched_init();
+void		sched_current_init();
 void		sched_timer_tick();
 struct thread	*sched_thread_create(thread_fn fn, void *p);
 void		wake_up(struct list_head *wq);
