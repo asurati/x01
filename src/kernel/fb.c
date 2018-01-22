@@ -86,7 +86,7 @@ void fb_init()
 	r.shared = 0;
 	r.domain = 0;
 
-	ret = mmu_map(NULL, &r);
+	ret = mmu_map(&r);
 	assert(ret == 0);
 
 	memset(fb, 0, fbi->sz);

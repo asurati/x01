@@ -100,7 +100,7 @@ void excpt_init()
 	r.shared = 0;
 	r.domain = 0;
 
-	ret = mmu_map(NULL, &r);
+	ret = mmu_map(&r);
 	assert(ret == 0);
 
 	/* TODO Drain pipeline. */

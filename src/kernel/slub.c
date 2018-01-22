@@ -120,7 +120,7 @@ void slub_init()
 	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
 		r.va_start = va[i];
 		r.pa_start = pa[i];
-		ret = mmu_map(NULL, &r);
+		ret = mmu_map(&r);
 		assert(ret == 0);
 		memset(va[i], 0, PAGE_SIZE);
 	}
@@ -218,7 +218,7 @@ void *kmalloc_page(int ix)
 	r.shared = 0;
 	r.domain = 0;
 
-	ret = mmu_map(NULL, &r);
+	ret = mmu_map(&r);
 	assert(ret == 0);
 
 	return p;

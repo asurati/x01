@@ -38,7 +38,7 @@ static void io_ctrl_init(struct mmu_map_req *r)
 	r->va_start = (void *)ctrl_base;
 	r->pa_start = CTRL_BASE_PA;
 
-	ret = mmu_map(NULL, r);
+	ret = mmu_map(r);
 	assert(ret == 0);
 }
 
@@ -66,7 +66,7 @@ void io_init()
 	r.shared = 1;
 	r.domain = 0;
 
-	ret = mmu_map(NULL, &r);
+	ret = mmu_map(&r);
 	assert(ret == 0);
 
 	io_ctrl_init(&r);

@@ -117,7 +117,7 @@ void mmu_init()
 	mmu_dcache_clean(pt, sizeof(uintptr_t));
 }
 
-int mmu_map(void *_pd, const struct mmu_map_req *r)
+int mmu_map(const struct mmu_map_req *r)
 {
 	int i, j, k, n, ret;
 	const int nunits[4] = {1, 16, 1, 16};
@@ -130,10 +130,7 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 	assert(r->ap < AP_MAX);
 	assert(r->mu < MAP_UNIT_MAX);
 
-	if (_pd == NULL)
-		pd = (uintptr_t *)&k_pd_start;
-	else
-		pd = _pd;
+	pd = (uintptr_t *)&k_pd_start;
 
 	/* The addresses must be aligned corresponding to the unit
 	 * requested.
@@ -245,7 +242,7 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 				tr.mt = MT_NRM_WBA;
 				tr.ap = AP_SRW;
 				tr.mu = MAP_UNIT_PAGE;
-				ret = mmu_map(NULL, &tr);
+				ret = mmu_map(&tr);
 				assert(ret == 0);
 				memset(tr.va_start, 0, PAGE_SIZE);
 
@@ -298,7 +295,7 @@ int mmu_map(void *_pd, const struct mmu_map_req *r)
 	return 0;
 }
 
-int mmu_unmap(void *_pd, const struct mmu_map_req *r)
+int mmu_unmap(const struct mmu_map_req *r)
 {
 	int i, j, k, n;
 	const int nunits[4] = {1, 16, 1, 16};
@@ -307,10 +304,7 @@ int mmu_unmap(void *_pd, const struct mmu_map_req *r)
 	assert(r && r->n > 0);
 	assert(r->mu < MAP_UNIT_MAX);
 
-	if (_pd == NULL)
-		pd = (uintptr_t *)&k_pd_start;
-	else
-		pd = _pd;
+	pd = (uintptr_t *)&k_pd_start;
 
 	/* The addresses must be aligned corresponding to the unit
 	 * requested.

@@ -99,7 +99,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 		/* Because the ram_map PT is already setup in boot.c,
 		 * the map call does not need to allocate a PT.
 		 */
-		ret = mmu_map(NULL, &r);
+		ret = mmu_map(&r);
 		assert(ret == 0);
 	}
 
