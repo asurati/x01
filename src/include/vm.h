@@ -65,5 +65,5 @@ void		vm_init();
 int		vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 			 void **va);
 int		vm_free(enum vm_area area, enum vm_alloc_units unit, int n,
-			const uintptr_t *va);
+			const void **va);
 #endif

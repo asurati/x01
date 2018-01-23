@@ -108,7 +108,6 @@ int vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 
 	assert(area < VMA_MAX);
 
-
 	/* Search for naturally aligned and sized block of free virtual
 	 * memory
 	 */
@@ -119,7 +118,7 @@ int vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 		assert(va[i]);
 		seg = kmalloc(sizeof(*seg));
 		seg->start = va[i];
-		BF_SET(seg->flags, VSF_NPAGES, 1 << unit);
+		BF_SET(seg->flags, VSF_NPAGES, 1u << unit);
 		list_add(&seg->entry, &vm_areas[area]);
 	}
 	mutex_unlock(&vm_areas_lock[area]);
@@ -127,5 +126,32 @@ int vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 	/* TODO free all and return error if at least one allocation
 	 * failed
 	 */
+	return 0;
+}
+
+int vm_free(enum vm_area area, enum vm_alloc_units unit, int n,
+	    const void **va)
+{
+	int i;
+	struct list_head *e;
+	struct vm_seg *seg;
+
+	assert(area < VMA_MAX);
+	mutex_lock(&vm_areas_lock[area]);
+	list_for_each(e, &vm_areas[area]) {
+		seg = list_entry(e, struct vm_seg, entry);
+		for (i = 0; i < n; ++i) {
+			if (va[i] == NULL)
+				continue;
+			if (seg->start != va[i])
+				continue;
+			assert(BF_GET(seg->flags, VSF_NPAGES) ==
+			       (1u << unit));
+			list_del(&seg->entry);
+			kfree(seg);
+			va[i] = NULL;
+		}
+	}
+	mutex_unlock(&vm_areas_lock[area]);
 	return 0;
 }

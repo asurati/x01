@@ -26,6 +26,7 @@
 
 #define SLUB_NSIZES		24
 #define SLUB_SUBPAGE_NSIZES	 9
+#define SLUB_FULLPAGE_NSIZES	(SLUB_NSIZES - SLUB_SUBPAGE_NSIZES)
 
 #define SLUB_ALLOC_SIZES_SZ	 3
 static const size_t slub_alloc_sizes[SLUB_NSIZES] = {
@@ -65,8 +66,10 @@ struct slab {
 	void *p;
 };
 
-/* Coarse lock for all slabs. TODO: Implement finer locks. */
-struct mutex slub_lock;
+struct fullpage_entry {
+	struct list_head entry;
+	void *va;
+};
 
 /* This variable is used to monitor the usage of the 16byte slabs.
  * If the number of free items are quite less, we need to use one
@@ -82,6 +85,8 @@ static int slub_16byte_free;
 static struct list_head subpage_full_heads[SLUB_SUBPAGE_NSIZES];
 static struct list_head subpage_part_heads[SLUB_SUBPAGE_NSIZES];
 static struct list_head subpage_none_heads[SLUB_SUBPAGE_NSIZES];
+static struct list_head fullpage_heads[SLUB_FULLPAGE_NSIZES];
+static struct mutex slub_locks[SLUB_NSIZES];
 
 /* For each of the 9 sizes, we allocate one page as the data page
  * p[0]. The struct slab for each of the 9 sizes are allocated
@@ -98,15 +103,19 @@ void slub_init()
 	void *va[SLUB_SUBPAGE_NSIZES];
 	extern char vm_slub_start;
 
-	mutex_init(&slub_lock);
-
 	assert(sizeof(struct slab) == 16);
+
+	for (i = 0; i < SLUB_NSIZES; ++i)
+		mutex_init(&slub_locks[i]);
 
 	for (i = 0; i < SLUB_SUBPAGE_NSIZES; ++i) {
 		init_list_head(&subpage_full_heads[i]);
 		init_list_head(&subpage_part_heads[i]);
 		init_list_head(&subpage_none_heads[i]);
 	}
+
+	for (i = 0; i < SLUB_FULLPAGE_NSIZES; ++i)
+		init_list_head(&fullpage_heads[i]);
 
 	ret = pm_ram_alloc(PM_UNIT_PAGE, PGF_USE_SLUB, SLUB_SUBPAGE_NSIZES, pa);
 	assert(ret == 0);
@@ -170,13 +179,18 @@ void slub_init()
 	}
 }
 
-static struct slab *slub_alloc_slab(int ix)
+/* Must be at process context. */
+static void slub_alloc_slab(int ix)
 {
 	int i, n;
 	void *p;
+	struct page *pg;
 	struct slab *s;
-	uintptr_t va;
+	uintptr_t va, pa, t;
 	size_t sz;
+
+	/* We allocate slabs only for subpage allocations. */
+	assert(ix < SLUB_SUBPAGE_NSIZES);
 
 	sz = slub_alloc_sizes[ix];
 	n = PAGE_SIZE >> (SLUB_ALLOC_SIZES_SZ + ix);
@@ -190,20 +204,35 @@ static struct slab *slub_alloc_slab(int ix)
 	assert(p);
 	memset(p, 0, PAGE_SIZE);
 
+	pa = mmu_va_to_pa(p);
+	assert(pa != 0xffffffff);
+	pg = pm_ram_get_page(pa);
+	assert(pg);
+
+	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
+	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
+
+	BF_SET(pg->flags, PGF_SLUB_SIZE, ix);
+	t = (uintptr_t)s;
+	BF_SET(t, SLUB_LEADER, 1);
+	pg->u0.va = (void *)t;
+
 	s->p = p;
 	s->nfree = n;
 	va = (uintptr_t)p;
 	for (i = 0; i < n; ++i, va += sz)
 		*(uint32_t *)va = i + 1;
-	return s;
+	list_add_tail(&s->entry, &subpage_none_heads[ix]);
 }
 
 void *kmalloc_page(int ix)
 {
 	int ret;
 	void *p;
-	uintptr_t pa;
+	struct page *pg;
+	uintptr_t pa, t;
 	struct mmu_map_req r;
+	struct fullpage_entry *e;
 
 	/* For now, only allocate single page. We also
 	 * need to track the allocations to support kfree().
@@ -230,7 +259,45 @@ void *kmalloc_page(int ix)
 	ret = mmu_map(&r);
 	assert(ret == 0);
 
+	e = kmalloc(sizeof(*e));
+	assert(e);
+	e->va = p;
+
+	pg = pm_ram_get_page(pa);
+	assert(pg);
+
+	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
+	/* The UNIT value depends on the index of allocation. */
+	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
+
+	/* For multiplage allocations, only the first page has
+	 * the LEADER bit set.
+	 */
+	BF_SET(pg->flags, PGF_SLUB_SIZE, ix);
+	t = (uintptr_t)e;
+	BF_SET(t, SLUB_LEADER, 1);
+	pg->u0.va = (void *)t;
+
+	mutex_lock(&slub_locks[ix]);
+	list_add_tail(&e->entry, &fullpage_heads[ix]);
+	mutex_unlock(&slub_locks[ix]);
+
 	return p;
+}
+
+void kfree_page(void *p, int ix, uintptr_t pa, struct fullpage_entry *e)
+{
+	int ret;
+	ix = ix;
+
+	list_del(&e->entry);
+	kfree(e);
+
+	ret = pm_ram_free(PM_UNIT_PAGE, PGF_USE_SLUB, 1, &pa);
+	assert(ret == 0);
+
+	ret = vm_free(VMA_SLUB, VM_UNIT_PAGE, 1, (const void **)&p);
+	assert(ret == 0);
 }
 
 void *kmalloc(size_t sz)
@@ -253,7 +320,7 @@ void *kmalloc(size_t sz)
 
 	/* subpage allocations. */
 
-	mutex_lock(&slub_lock);
+	mutex_lock(&slub_locks[i]);
 
 	shft = SLUB_ALLOC_SIZES_SZ + i;
 	n = PAGE_SIZE >> shft;
@@ -268,8 +335,7 @@ void *kmalloc(size_t sz)
 		 * size.
 		 */
 		assert(i != 1);
-		s = slub_alloc_slab(i);
-		list_add(&s->entry, h);
+		slub_alloc_slab(i);
 	}
 
 	assert(!list_empty(h));
@@ -304,13 +370,12 @@ void *kmalloc(size_t sz)
 		--slub_16byte_free;
 
 	if (slub_16byte_free == 4) {
-		s = slub_alloc_slab(1);
-		list_add_tail(&s->entry, &subpage_none_heads[1]);
+		slub_alloc_slab(1);
 		slub_16byte_free += PAGE_SIZE >> (SLUB_ALLOC_SIZES_SZ + 1);
 	}
 
 	assert(p);
-	mutex_unlock(&slub_lock);
+	mutex_unlock(&slub_locks[i]);
 	return p;
 }
 
@@ -335,11 +400,13 @@ void kfree(void *p)
 	assert(BF_GET(t, SLUB_LEADER));
 
 	BF_CLR(t, SLUB_LEADER);
-	s = (void *)t;
 
 	i = BF_GET(pg->flags, PGF_SLUB_SIZE);
 
-	assert(i < SLUB_SUBPAGE_NSIZES);
+	if (i >= SLUB_SUBPAGE_NSIZES)
+		return kfree_page(p, i, pa, (struct fullpage_entry *)t);
+
+	s = (void *)t;
 
 	/* subpage allocations occur in PAGE_SIZE pages. */
 	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
@@ -350,7 +417,7 @@ void kfree(void *p)
 	/* The pointer p must be appropriately aligned. */
 	assert(((uintptr_t)p & (slub_alloc_sizes[i] - 1)) == 0);
 
-	mutex_lock(&slub_lock);
+	mutex_lock(&slub_locks[i]);
 	/* The slab->p must be a single page for subpage allocations. */
 	assert(s->p <= p && p < s->p + PAGE_SIZE);
 
@@ -377,5 +444,5 @@ void kfree(void *p)
 		list_del(e);
 		list_add(e, nh);
 	}
-	mutex_unlock(&slub_lock);
+	mutex_unlock(&slub_locks[i]);
 }
