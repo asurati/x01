@@ -28,9 +28,9 @@
 #define IORF_TYPE_POS			 1
 #define IORF_TYPE_SZ			 4
 
-#define IORF_TYPE_READ		 1
-#define IORF_TYPE_WRITE		 2
-#define IORF_TYPE_IOCTL		 3
+#define IORF_TYPE_READ			1
+#define IORF_TYPE_WRITE			2
+#define IORF_TYPE_IOCTL			3
 
 #define IOCTL_CODE_POS			 0
 #define IOCTL_CODE_SZ			16

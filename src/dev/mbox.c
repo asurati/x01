@@ -104,18 +104,23 @@ static int mbox_irq_sched(void *data)
 _ctx_sched
 static void mbox_io_process(struct list_head *e)
 {
-	int ch;
+	int ch, code;
 	uintptr_t pa;
 
 	assert(req_pending == NULL);
 	req_pending = list_entry(e, struct io_req, entry);
 
 	/* Error error checking. */
-	if (BF_GET(req_pending->u.ioctl.code, IOCTL_CODE) ==
-	    MBOX_IOCTL_UART_CLOCK)
-		ch = MBOX_CH_PROP;
-	else
+
+	code = BF_GET(req_pending->u.ioctl.code, IOCTL_CODE);
+	switch (code) {
+	case MBOX_IOCTL_FB_ALLOC:
 		ch = MBOX_CH_FB;
+		break;
+	default:
+		ch = MBOX_CH_PROP;
+		break;
+	}
 
 	mmu_dcache_clean_inv(req_pending->req, req_pending->sz);
 
@@ -138,6 +143,8 @@ int mbox_io(struct io_req *r)
 
 	BF_SET(r->flags, IORF_DONE, 0);
 	r->ret = 0;
+
+	assert(BF_GET(r->flags, IORF_TYPE) == IORF_TYPE_IOCTL);
 
 	/* va_to_pa must be called in the process context. */
 	pa = mmu_va_to_pa(r->req);
