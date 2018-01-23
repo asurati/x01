@@ -122,7 +122,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 			t = va - kmode_va;
 			t >>= PAGE_SIZE_SZ;
 			BF_SET(ram_map[t].flags, PGF_UNIT, PM_UNIT_PAGE);
-			atomic_set(&ram_map[t].u0.ref, 1);
+			ram_map[t].u0.ref = 1;
 		}
 	}
 
@@ -131,7 +131,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 		for (j = 0; j < 16; ++j, ++t) {
 			BF_SET(ram_map[t + j].flags, PGF_UNIT,
 			       PM_UNIT_LARGE_PAGE);
-			atomic_set(&ram_map[t + j].u0.ref, 1);
+			ram_map[t + j].u0.ref = 1;
 		}
 	}
 
@@ -187,7 +187,7 @@ int pm_ram_alloc(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 			BF_SET(pg->flags, PGF_UNIT, unit);
 			BF_SET(pg->flags, PGF_USE, use);
 			if (use == PGF_USE_NORMAL)
-				atomic_set(&ram_map[t + j].u0.ref, 1);
+				ram_map[t + j].u0.ref = 1;
 		}
 	}
 exit:
@@ -217,11 +217,6 @@ int pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 		 * the unit passed.
 		 */
 		assert((p & mask) == 0);
-		/*
-		if (p & mask)
-			break;
-			*/
-
 
 		/* The struct page flags must reflect the unit, the use,
 		 * and an appropriate ref count.
@@ -231,31 +226,15 @@ int pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 			assert(BF_GET(pg->flags, PGF_UNIT) == unit);
 			assert(BF_GET(pg->flags, PGF_USE) == use);
 			if (use == PGF_USE_NORMAL)
-				assert(atomic_read(&ram_map[p + j].u0.ref) ==
-				       1);
-			/*
-			if (BF_GET(ram_map[p + j].flags, PGF_UNIT) != unit)
-				break;
-			if (atomic_read(&ram_map[p + j].u0.ref) != 1)
-				break;
-				*/
+				assert(ram_map[p + j].u0.ref == 1);
 		}
-
-		/*
-		if (j != (1 << unit))
-			break;
-			*/
 
 		/* The page must be busy in the buddy bitmap. */
 		ret = bdy_free(&bdy_ram, unit, p >> unit);
 		assert(ret == 0);
-		/*
-		if (ret)
-			break;
-			*/
 
 		for (j = 0; j < (1 << unit); ++j)
-			atomic_set(&ram_map[p + j].u0.ref, 0);
+			ram_map[p + j].u0.ref = 0;
 	}
 
 	mutex_unlock(&ram_map_lock);

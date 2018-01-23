@@ -18,7 +18,6 @@
 #ifndef _PM_H_
 #define _PM_H_
 
-#include <atomic.h>
 #include <bdy.h>
 
 /* PM_UNIT_MAX must equal BDY_NLEVELS. */
@@ -77,7 +76,7 @@ enum pm_page_usage {
 struct page {
 	uint32_t flags;
 	union {
-		struct atomic ref;
+		int ref;
 		void *va;		/* struct slab. */
 	} u0;
 

@@ -46,7 +46,6 @@ OBJS += kernel/sched.o
 OBJS += kernel/mmu.o
 OBJS += kernel/bdy.o
 OBJS += kernel/pm.o
-OBJS += kernel/atomic.o
 OBJS += kernel/slub.o
 OBJS += kernel/list.o
 OBJS += kernel/vm.o
