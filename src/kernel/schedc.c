@@ -274,7 +274,6 @@ void mutex_unlock(struct mutex *m)
 {
 	preempt_disable();
 	m->lock = 0;
-	barrier();
 	wake_up_preempt_disabled(&m->wq);
 	preempt_enable();
 }
