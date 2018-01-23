@@ -83,9 +83,13 @@ _ctx_sched
 static int mbox_irq_sched(void *data)
 {
 	data = data;
-	barrier();
+	/* The setting of the DONE bit will be visible to the sleeping
+	 * process latest at the preempt_enable() release performed
+	 * by wake_up().
+	 */
 	BF_SET(req_pending->flags, IORF_DONE, 1);
 	wake_up(req_pending->wq);
+
 	/* Cannot touch the request once the wake up
 	 * has been signalled.
 	 */
