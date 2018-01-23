@@ -43,7 +43,7 @@ struct thread {
 	char ticks;
 	char state;
 	char in_irq_ctx;
-	char res[2];
+	char res[1];
 	int irq_soft_count;
 	int irq_sched_count;
 };
