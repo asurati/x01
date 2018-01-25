@@ -32,6 +32,8 @@
 #include <string.h>
 #include <uart.h>
 
+#ifdef QRPI2
+
 static int display_thread(void *p)
 {
 	void *q;
@@ -40,7 +42,7 @@ static int display_thread(void *p)
 	int i, row, colsz;
 	uint8_t *line[2];
 
-	p = p;
+	(void)p;
 
 	fb_info_get(&fbi);
 
@@ -48,8 +50,11 @@ static int display_thread(void *p)
 	line[0] = kmalloc(colsz);
 	line[1] = kmalloc(colsz);
 
+	assert(line[0] && line[1]);
+
 	memset(line[0], 0, colsz);
 	memset(line[1], 0, colsz);
+
 
 	for (i = 0; i < colsz; i += (fbi.depth >> 3)) {
 		line[0][i] = 0xff;		/* Red */
@@ -80,39 +85,45 @@ static int display_thread(void *p)
 		 * fires every second, the loop wakes up every second to change
 		 * the colour of the box.
 		 */
-		asm volatile("wfi");
+		wfi();
 		i = !i;
 	}
 	return 0;
 }
 
-void kmain(const void *al)
+#endif
+
+static int ticker_thread(void *p)
+{
+	int ticks = 0;
+
+	(void)p;
+
+	while (1) {
+		uart_send_num(ticks);
+		wfi();
+		++ticks;
+	}
+	return 0;
+}
+
+void kmain()
 {
 	struct list_head wq;
 	uint32_t ram, ramsz;
-	const uint32_t *p = al;
+	extern uint32_t _ram, _ramsz;
 
-	/* Search the atag list for RAM details. */
-	ram = ramsz = 0;
-	while (1) {
-		if (p[0] == 0 && p[1] == 0)
-			break;
-
-		/* ATAG_MEM */
-		if (p[1] == 0x54410002) {
-			ramsz = p[2];
-			ram = p[3];
-			break;
-		}
-		p += p[0];
-	}
+	/* Read before the identity map is destroyed. */
+	ram = _ram;
+	ramsz = _ramsz;
+	barrier();
 
 	sched_current_init();
 	mmu_init();
+	io_init();
 	pm_init(ram, ramsz);
 	slub_init();
 	vm_init();
-	io_init();
 	excpt_init();
 	intc_init();
 	irq_init();
@@ -123,14 +134,24 @@ void kmain(const void *al)
 	/* Enable IRQs once hard and soft IRQs are setup. */
 	irq_enable();
 
+	timer_start();
+
 	/* The following init() calls require IRQs to be enabled,
 	 * since they involve IO to the MBOX.
 	 */
 
+#ifdef QRPI2
 	fb_init();
+#endif
+
 	uart_init();
 
+#ifdef QRPI2
 	sched_thread_create(display_thread, NULL);
+	sched_thread_create(ticker_thread, NULL);
+#else
+	sched_thread_create(ticker_thread, NULL);
+#endif
 
 	init_list_head(&wq);
 
