@@ -53,7 +53,7 @@ static void *get_pte_va(const void *va)
 void mmu_tlb_invalidate(void *va, size_t sz)
 {
 	uintptr_t i, s, e;
-	if (sz <= 0)
+	if (sz == 0)
 		return;
 
 	s = ALIGN_DN((uintptr_t)va, PAGE_SIZE);
@@ -64,7 +64,55 @@ void mmu_tlb_invalidate(void *va, size_t sz)
 		asm volatile("mcr	p15, 0, %0, c8, c6, 1\n\t"
 			     : : "r" (i));
 	}
+
 	mmu_dsb();
+
+	/* B2.7.3 says a PrefetchFlush is required if the data TLB
+	 * maintenance is to be made visible to subsequent explicit
+	 * memory operations.
+	 *
+	 * See also https://patchwork.ozlabs.org/patch/102891/
+
+
+
+	 Catalin Marinas July 6, 2011, 4:15 p.m. | #22
+	 On Wed, Jul 06, 2011 at 04:55:25PM +0100, Russell King - ARM Linux wrote:
+	 > On Wed, Jul 06, 2011 at 04:52:14PM +0100, Catalin Marinas wrote:
+	 > > On Tue, Jul 05, 2011 at 10:46:52AM +0100, Russell King - ARM Linux wrote:
+	 > > > I've since added the dsb+isbs back to the TLB ops because the ARM ARM
+	 > > > is qutie explicit that both are required to ensure that explicit
+	 > > > accesses see the effect of the TLB operation.  To me it is rather
+	 > > > perverse that an ISB is required to ensure that this sequence works:
+	 > > >
+	 > > > 	write page table entry
+	 > > > 	clean
+	 > > > 	dsb
+	 > > > 	flush tlb entry
+	 > > > 	dsb
+	 > > > 	isb
+	 > > > 	read/write new page
+	 > >
+	 > > The same requirement can be found in latest (internal only) ARM ARM as
+	 > > well. I think the reason is that some memory access already in the
+	 > > pipeline (but after the TLB flush) may have sampled the state of the
+	 > > page table using an old TLB entry, even though the actual memory access
+	 > > will happen after the DSB.
+	 >
+	 > It would be useful to have a statement from RG on this.  Could you
+	 > pass this to him please?
+
+	 Just checked - it is required as per the ARM ARM and there are cores
+	 that rely on the ISB. As I said, it depends on the pipeline
+	 implementation.
+
+
+	 */
+
+	/* The page-table walk for the read/write needs only DSB to see the
+	 * changed entry, but the observing the effect of the entry over the
+	 * mapped page (by program-order read/write to the page)
+	 * needs ISB() in addition.
+	 */
 }
 
 void mmu_init()
@@ -104,20 +152,22 @@ void mmu_init()
 	pa = (uintptr_t)&k_pt_pa;
 
 	te = 0;
-        BF_SET(te, PTE_TYPE, 2);        /* Small Page. */
-        BF_SET(te, PTE_AP, 1);          /* Supervisor-only. */
-        BF_SET(te, PTE_SP_XN, 1);       /* No Execute. */
-        BF_SET(te, PTE_C, 1);           /* I/O WB, AoW. */
-        BF_SET(te, PTE_B, 1);
-        BF_SET(te, PTE_SP_TEX, 1);
-        BF_PUSH(te, PTE_SP_BASE, pa);
-        pt[0] = te;
+	BF_SET(te, PTE_TYPE, 2);        /* Small Page. */
+	BF_SET(te, PTE_AP, 1);          /* Supervisor-only. */
+	BF_SET(te, PTE_SP_XN, 1);       /* No Execute. */
+	BF_SET(te, PTE_C, 1);           /* I/O WB, AoW. */
+	BF_SET(te, PTE_B, 1);
+	BF_SET(te, PTE_SP_TEX, 1);
+	BF_PUSH(te, PTE_SP_BASE, pa);
+	pt[0] = te;
 	mmu_dcache_clean(pt, sizeof(uintptr_t));
 
 	/* Map the ram map PT at the appropriate location. */
 	va = get_pte_va(&ram_map_start);
 	pt = get_pte_va(va);
 	pa = (uintptr_t)&ram_map_pt_pa;
+
+	BF_CLR(te, PTE_SP_BASE);
 	BF_PUSH(te, PTE_SP_BASE, pa);
 	pt[0] = te;
 	mmu_dcache_clean(pt, sizeof(uintptr_t));
@@ -256,6 +306,7 @@ int mmu_map(const struct mmu_map_req *r)
 				assert(ret == 0);
 				mutex_lock(&k_pd_lock);
 				memset(tr.va_start, 0, PAGE_SIZE);
+				mmu_dcache_clean(tr.va_start, PAGE_SIZE);
 
 				for (k = 0; k < 4; ++k) {
 					de = 0;
@@ -264,6 +315,7 @@ int mmu_map(const struct mmu_map_req *r)
 					pd[j + k] = de;
 					tr.pa_start += 0x400;
 				}
+				mmu_dcache_clean(&pd[j], 4 * sizeof(uintptr_t));
 			}
 
 			pt = get_pte_va((void *)va);
