@@ -17,6 +17,7 @@
 
 #include <assert.h>
 #include <io.h>
+#include <irq.h>
 #include <mbox.h>
 #include <uart.h>
 #include <slub.h>
@@ -47,7 +48,6 @@
 
 #define UART_LCRH_WLEN_8	3
 
-int gclk;
 void uart_init()
 {
 	int ret;
@@ -55,6 +55,13 @@ void uart_init()
 	struct mbox_prop_buf *b;
 	struct list_head wq;
 	struct io_req ior;
+
+#ifdef RPI
+	/* Since we boot using U-Boot, the UART
+	 * is already initialized.
+	 */
+	return;
+#endif
 
 	b = kmalloc(sizeof(*b));
 	memset(b, 0, sizeof(*b));
@@ -74,7 +81,7 @@ void uart_init()
 	assert(ret == IO_RET_PENDING);
 	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
 
-	gclk = clk = b->u.clk_rate.rate;
+	clk = b->u.clk_rate.rate;
 	kfree(b);
 
 	dvdr = 115200 << 4;
@@ -96,13 +103,42 @@ void uart_init()
 
 	v = 0;
 	BF_SET(v, UART_CR_EN, 1);
-	BF_SET(v, UART_CR_TXEN, 1);
+	//BF_SET(v, UART_CR_TXEN, 1);
 	writel(v, io_base + UART_CR);
 }
 
 void uart_send(char c)
 {
+	while (readl(io_base + UART_FR) & 0x20)
+		wfi();
 	writel(c, io_base + UART_DR);
-	writel('\r', io_base + UART_DR);
-	writel('\n', io_base + UART_DR);
+}
+
+void uart_send_num(uint32_t v)
+{
+	int i;
+	char str[9];
+	const char *hd = "0123456789abcdef";
+
+	i = 0;
+	while (v) {
+		str[i] = hd[v & 0xf];
+		v >>= 4;
+		++i;
+	}
+	if (i == 0) {
+		uart_send('0');
+	} else {
+		for (i = i - 1; i >= 0; --i)
+			uart_send(str[i]);
+	}
+	uart_send('\r');
+	uart_send('\n');
+}
+
+void uart_send_str(const char *s)
+{
+	int i;
+	for (i = 0; s[i]; ++i)
+		uart_send(s[i]);
 }

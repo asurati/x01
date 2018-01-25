@@ -20,4 +20,6 @@
 
 void	uart_init();
 void	uart_send(char c);
+void	uart_send_num(uint32_t v);
+void	uart_send_str(const char *s);
 #endif
