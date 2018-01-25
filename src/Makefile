@@ -17,16 +17,18 @@
 
 # LOAD_PA must be 0x10000, if QEMU is to run the binary.
 LOAD_PA := 0x10000
+CROSS := ~/cross/arm-none-eabi/tools
+
 
 # RPI2 for QEMU emulation, RPI for hardware execution.
 BOARD := QRPI2
 #BOARD := RPI
 
 QEMU :=	qemu-system-arm
-CC := arm-none-eabi-gcc
-LD := arm-none-eabi-ld
-AS := arm-none-eabi-as
-OC := arm-none-eabi-objcopy
+CC := LD_LIBRARY_PATH=$(CROSS)/lib $(CROSS)/bin/arm-none-eabi-gcc
+LD := $(CROSS)/bin/arm-none-eabi-ld
+AS := $(CROSS)/bin/arm-none-eabi-as
+OC := $(CROSS)/bin/arm-none-eabi-objcopy
 DD := dd
 MK := mkimage
 
@@ -74,7 +76,8 @@ QFLAGS := -m 256 -M raspi2 -kernel $(BIN) -serial stdio \
 
 LDFLAGS := -n -T pi.ld -defsym LOAD_PA=$(LOAD_PA)
 CFLAGS := -c -mcpu=arm1176jzf-s -ffreestanding -nostdlib -O3 -Wall -Wextra \
-	  -Werror -I ./include/ -fno-common -D$(BOARD) -g -mabi=aapcs
+	  -Werror -I ./include/ -fno-common -D$(BOARD) -g -mabi=aapcs \
+	  -mno-unaligned-access
 AFLAGS := -mcpu=arm1176jzf-s
 
 IMG_ENTRY = 0x$(shell xxd -l 4 -s 0x18 -e $(ELF) | cut -c11-18)
