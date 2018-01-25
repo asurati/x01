@@ -125,6 +125,20 @@ static inline void mmu_dcache_clean_inv(void *va, size_t sz)
 	for (i = s; i < e; i += CACHE_LINE_SIZE)
 		asm volatile("mcr	p15, 0, %0, c7, c14, 1\n\t"
 			     : : "r" (i));
+
+	/* From B2.7.2: */
+
+	/* If the cache maintenance needs only to make its effect
+	 * visible to the explicit memory operations appearing after
+	 * the maintenance in the program order, dmb() is sufficient.
+	 *
+	 * dmb() also orders prior cache maintenance with later
+	 * cache maintenance and explicit program-order memory operations.
+	 *
+	 * But completion of dmb() does not ensure that the effect of
+	 * cache maintenance is visible to other observers (other CPUs,
+	 * devices, page-table walks, etc). For these, dsb() is required.
+	 */
 	mmu_dsb();
 }
 
