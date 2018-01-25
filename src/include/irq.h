@@ -60,6 +60,23 @@ static inline void irq_disable()
 	asm volatile("cpsid i" : : : "cc", "memory");
 }
 
+#ifdef QRPI2
+
+static inline void wfi()
+{
+	asm volatile("wfi");
+}
+
+#else	/* QRPI2 */
+
+static inline void wfi()
+{
+	asm volatile("mcr	p15, 0, %0, c7, c0, 4"
+		     : : "r" (0));
+}
+
+#endif
+
 #define IRQH_RET_NONE		0
 #define IRQH_RET_HANDLED	(1 << 0)
 #define IRQH_RET_SOFT		(1 << 1)
