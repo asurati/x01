@@ -44,7 +44,7 @@ static int ticks;
 _ctx_hard
 static int timer_irq(void *data)
 {
-	data = data;
+	(void)data;
 
 	if (!timer_is_asserted())
 		return IRQH_RET_NONE;
@@ -66,7 +66,7 @@ static int timer_irq_soft(void *data)
 {
 	int lt;
 
-	data = data;
+	(void)data;
 
 	/* These changes race with the updates made by the IRQ.
 	 * Disable the IRQ (this is UP) before changing.
@@ -74,7 +74,6 @@ static int timer_irq_soft(void *data)
 	irq_disable();
 	lt = ticks;
 	ticks = 0;
-	irq_soft_clear(IRQ_SOFT_TIMER);
 	irq_enable();
 
 	sched_timer_tick(lt);
@@ -91,6 +90,10 @@ void timer_init()
 	irq_soft_insert(IRQ_SOFT_TIMER, timer_irq_soft, NULL);
 
 	freq = timer_freq();
+}
+
+void timer_start()
+{
 	timer_rearm(freq);
 	timer_enable();
 }
