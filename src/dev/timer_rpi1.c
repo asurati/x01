@@ -25,7 +25,7 @@
 #define TMR_CS			(TMR_BASE)
 #define TMR_CLO			(TMR_BASE + 0x4)
 #define TMR_CHI			(TMR_BASE + 0x8)
-#define TMR_C3			(TMR_BASE + 0x10)
+#define TMR_C3			(TMR_BASE + 0x18)
 
 #define TMR_CS_M3_POS		3
 #define TMR_CS_M3_SZ		1
@@ -66,7 +66,7 @@ char timer_is_asserted()
 void timer_rearm(uint32_t freq)
 {
 	uint32_t v;
-	v = readl(io_base + TMR_C3);
+	v = readl(io_base + TMR_CLO);
 	v += freq;
 	writel(v, io_base + TMR_C3);
 }
