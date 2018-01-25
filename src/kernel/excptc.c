@@ -26,7 +26,7 @@ static const void *excpt_vec_base = &excpt_start;
 static void loop()
 {
 	while (1)
-		asm volatile("wfi");
+		wfi();
 }
 
 void excpt_reset() {loop();}
