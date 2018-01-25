@@ -16,6 +16,9 @@
  */
 
 #include <assert.h>
+#include <irq.h>
+#include <uart.h>
+
 char *asrt_msg;
 char *asrt_file;
 int asrt_line;
@@ -24,5 +27,16 @@ void assert_fail(const char *a, const char *f, int l)
 	asrt_msg = (char *)a;
 	asrt_file = (char *)f;
 	asrt_line = l;
-	asm volatile("udf #1");
+
+	irq_disable();
+
+	uart_send('!');
+	uart_send_str(a);
+	uart_send(' ');
+	uart_send_str(f);
+	uart_send(':');
+	uart_send_num(l);
+
+	while (1)
+		wfi();
 }
