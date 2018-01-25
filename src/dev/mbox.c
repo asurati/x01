@@ -68,7 +68,7 @@ static struct mbox *ro;
 _ctx_hard
 static int mbox_irq(void *data)
 {
-	data = data;
+	(void)data;
 
 	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
 		/* Silence the interrupt by reading the RW field. */
@@ -82,7 +82,7 @@ static void mbox_io_process();
 _ctx_sched
 static int mbox_irq_sched(void *data)
 {
-	data = data;
+	(void)data;
 	/* The setting of the DONE bit will be visible to the sleeping
 	 * process latest at the preempt_enable() release performed
 	 * by wake_up().
