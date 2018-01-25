@@ -27,6 +27,7 @@ SECTIONS
 	.boot : {
 		boot/start.o(.text);
 		boot/boot.o(.text);
+		boot/boot.o(.bss);
 		boot/boot.o(.rodata);
 	}
 

@@ -166,3 +166,23 @@ void boot_map()
 		}
 	}
 }
+
+uint32_t _ramsz, _ram;
+void boot_copy_atag_mem(void *al)
+{
+	const uint32_t *p = al;
+
+	/* Search the atag list for RAM details. */
+	while (1) {
+		if (p[0] == 0 && p[1] == 0)
+			break;
+
+		/* ATAG_MEM */
+		if (p[1] == 0x54410002) {
+			_ramsz = p[2];
+			_ram = p[3];
+			break;
+		}
+		p += p[0];
+	}
+}
