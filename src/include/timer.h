@@ -19,4 +19,5 @@
 #define _TIMER_H_
 
 void	timer_init();
+void	timer_start();
 #endif
