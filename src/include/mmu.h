@@ -19,6 +19,7 @@
 #define _MMU_H_
 
 #include <types.h>
+#include <barrier.h>
 
 extern const uintptr_t kmode_va;
 extern const uintptr_t pt_area_va;
@@ -105,12 +106,6 @@ extern const uintptr_t pt_area_va;
 #define TTBCR_PD0_POS		 4
 #define TTBCR_PD0_SZ		 1
 
-#define mmu_dsb() \
-	do { \
-		asm volatile("mcr	p15, 0, %0, c7, c10, 4\n\t" \
-			     : : "r" (0)); \
-	} while (0)
-
 #ifdef QRPI2
 
 static inline void mmu_dcache_clean_inv(void *va, size_t sz)
@@ -139,7 +134,7 @@ static inline void mmu_dcache_clean_inv(void *va, size_t sz)
 	 * cache maintenance is visible to other observers (other CPUs,
 	 * devices, page-table walks, etc). For these, dsb() is required.
 	 */
-	mmu_dsb();
+	dsb();
 }
 
 static inline void mmu_dcache_clean(void *va, size_t sz)
@@ -154,7 +149,7 @@ static inline void mmu_dcache_clean(void *va, size_t sz)
 	for (i = s; i < e; i += CACHE_LINE_SIZE)
 		asm volatile("mcr	p15, 0, %0, c7, c10, 1\n\t"
 			     : : "r" (i));
-	mmu_dsb();
+	dsb();
 }
 
 #else /* QRPI2 */
@@ -170,7 +165,7 @@ static inline void mmu_dcache_clean_inv(void *va, size_t sz)
 	e = s + sz - 1;
 	asm volatile("mcrr	p15, 0, %0, %1, c14\n\t"
 		     : : "r" (e), "r" (s));
-	mmu_dsb();
+	dsb();
 }
 
 static inline void mmu_dcache_clean(void *va, size_t sz)
@@ -184,7 +179,7 @@ static inline void mmu_dcache_clean(void *va, size_t sz)
 	e = s + sz - 1;
 	asm volatile("mcrr	p15, 0, %0, %1, c12\n\t"
 		     : : "r" (e), "r" (s));
-	mmu_dsb();
+	dsb();
 }
 
 #endif /* QRPI2 */

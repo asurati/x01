@@ -20,6 +20,7 @@
 #include <mmu.h>
 #include <string.h>
 #include <mutex.h>
+#include <barrier.h>
 
 extern char KMODE_VA;
 extern char pt_start;
@@ -65,7 +66,7 @@ void mmu_tlb_invalidate(void *va, size_t sz)
 			     : : "r" (i));
 	}
 
-	mmu_dsb();
+	dsb();
 
 	/* B2.7.3 says a PrefetchFlush is required if the data TLB
 	 * maintenance is to be made visible to subsequent explicit

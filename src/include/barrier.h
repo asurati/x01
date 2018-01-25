@@ -18,13 +18,21 @@
 #ifndef _BARRIER_H_
 #define _BARRIER_H_
 
-#define barrier()					\
-	do {						\
-		asm volatile("" : : : "memory");	\
+#define barrier()							\
+	do {								\
+		asm volatile("" : : : "memory");			\
 	} while (0)
 
-#define dmb()						\
-	asm volatile("mcr	p15, 0, %0, c7, c10, 5" \
-		     : : "r" (0) : "memory")
+#define dmb()								\
+	do {								\
+		asm volatile("mcr	p15, 0, %0, c7, c10, 5"		\
+			     : : "r" (0) : "memory");			\
+	} while (0)
+
+#define dsb() \
+	do { \
+		asm volatile("mcr	p15, 0, %0, c7, c10, 4\n\t" \
+			     : : "r" (0)); \
+	} while (0)
 
 #endif
