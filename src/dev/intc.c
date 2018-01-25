@@ -23,14 +23,26 @@
 #define INTC_PEND0			(INTC_BASE)
 #define INTC_PEND1			(INTC_BASE + 0x4)
 #define INTC_PEND2			(INTC_BASE + 0x8)
-#define INTC_EN0			(INTC_BASE + 0x18)
+#define INTC_EN_BASIC			(INTC_BASE + 0x18)
 #define INTC_EN1			(INTC_BASE + 0x10)
 #define INTC_EN2			(INTC_BASE + 0x14)
 #define INTC_FIQ			(INTC_BASE + 0xc)
 
 /* STIMER is the System (SoC) Timer, unavailable on QRPI2. */
-#define INTC_IRQ_STIMER_POS		0
+
+/* The RPi timer being used is the INTERRUPT_TIMER3 (C3)
+ * timer, whose IRQ is at bit 3 in the EN1 register.
+ *
+ * The RPi Mailbox IRQ is at bit 1 in the Basic
+ * (EN_BASIC) register.
+ *
+ * Avoid using the Basic registers of the interrupt
+ * controller.
+ */
+
+#define INTC_IRQ_STIMER_POS		3
 #define INTC_IRQ_MBOX_POS		1
+
 #define INTC_IRQ_STIMER_SZ		1
 #define INTC_IRQ_MBOX_SZ		1
 
@@ -39,18 +51,17 @@ void intc_init()
 {
 	uint32_t v;
 
-	v = 0;
-
-	/* Disable everything. */
-	writel(v, io_base + INTC_EN0);
-	writel(v, io_base + INTC_EN1);
-	writel(v, io_base + INTC_EN2);
-	writel(v, io_base + INTC_FIQ);
+	/* Disable FIQ. */
+	writel(0, io_base + INTC_FIQ);
 
 	/* Enable MBOX interrupt. */
+	v = readl(io_base + INTC_EN_BASIC);
 	BF_SET(v, INTC_IRQ_MBOX, 1);
+	writel(v, io_base + INTC_EN_BASIC);
+
 #ifdef RPI
+	v = readl(io_base + INTC_EN1);
 	BF_SET(v, INTC_IRQ_STIMER, 1);
+	writel(v, io_base + INTC_EN1);
 #endif
-	writel(v, io_base + INTC_EN0);
 }
