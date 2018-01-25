@@ -172,8 +172,11 @@ int schedule()
 
 void wake_up_preempt_disabled(struct list_head *wq)
 {
+	int queue_sched_irq;
 	struct list_head *e;
 	struct thread *t;
+
+	queue_sched_irq = 0;
 
 	while (!list_empty(wq)) {
 		e = wq->next;
@@ -182,7 +185,6 @@ void wake_up_preempt_disabled(struct list_head *wq)
 		t = list_entry(e, struct thread, entry);
 
 		assert(t != idle);
-		assert(current != idle);
 
 		assert(t->state == THRD_STATE_WAITING ||
 		       t->state == THRD_STATE_MUTEX_WAITING);
@@ -195,8 +197,12 @@ void wake_up_preempt_disabled(struct list_head *wq)
 		} else {
 			t->state = THRD_STATE_READY;
 			list_add_tail(e, &ready);
+			queue_sched_irq = 1;
 		}
 	}
+
+	if (current == idle && queue_sched_irq)
+		irq_sched_raise(IRQ_SCHED_SCHED);
 }
 
 void wake_up(struct list_head *wq)
@@ -244,7 +250,7 @@ static int sched_idle(void *data)
 	data = data;
 
 	while (1)
-		asm volatile("wfi");
+		wfi();
 
 	return 0;
 }
