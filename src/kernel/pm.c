@@ -30,7 +30,7 @@ static int	_pm_ram_alloc(enum pm_alloc_units unit, int n, uintptr_t *pa);
 
 void pm_init(uint32_t ram, uint32_t _ramsz)
 {
-	int i, j, mapsz, npfns, ret;
+	int i, mapsz, npfns, ret;
 	size_t _128mb;
 	uintptr_t pa[4], va, t;
 	struct mmu_map_req r;
@@ -81,30 +81,29 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 	ram_map = (struct page *)&ram_map_start;
 
 	mapsz = ALIGN_UP(npfns * sizeof(struct page), PAGE_SIZE);
-	assert(mapsz == 256 * 1024);
 
-	ret = _pm_ram_alloc(PM_UNIT_LARGE_PAGE, 4, pa);
+	/* 128MB RAM is equivalent to 32768 4KB frames. The current
+	 * sizeof(struct page) is 8 bytes, which results in a
+	 * ram_map of size 256KB. To allow growing the struct page,
+	 * the maximum size the map can consume is fixed at 1MB.
+	 */
+	assert(mapsz <= 1024 * 1024);
+
+	ret = _pm_ram_alloc(PM_UNIT_SECTION, 1, pa);
 	assert(ret == 0);
 
+	r.va_start = ram_map;
+	r.pa_start = pa[0];
 	r.n = 1;
 	r.mt = MT_NRM_WBA;
 	r.ap = AP_SRW;
-	r.mu = MAP_UNIT_LARGE_PAGE;
+	r.mu = MAP_UNIT_SECTION;
 	r.exec = 0;
 	r.global = 1;
 	r.shared = 0;
 	r.domain = 0;
-
-	va = (uintptr_t)ram_map;
-	for (i = 0; i < 4; ++i, va += 64 * 1024) {
-		r.va_start = (void *)va;
-		r.pa_start = pa[i];
-		/* Because the ram_map PT is already setup in boot.c,
-		 * the map call does not need to allocate a PT.
-		 */
-		ret = mmu_map(&r);
-		assert(ret == 0);
-	}
+	ret = mmu_map(&r);
+	assert(ret == 0);
 
 	memset(ram_map, 0, mapsz);
 
@@ -126,13 +125,11 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 		}
 	}
 
-	for (i = 0; i < 4; ++i) {
-		t = pa[i] >> PAGE_SIZE_SZ;
-		for (j = 0; j < 16; ++j, ++t) {
-			BF_SET(ram_map[t + j].flags, PGF_UNIT,
-			       PM_UNIT_LARGE_PAGE);
-			ram_map[t + j].u0.ref = 1;
-		}
+	/* There are 256 4KB contigous pages in a 1MB allocation. */
+	t = pa[0] >> PAGE_SIZE_SZ;
+	for (i = 0; i < 256; ++i) {
+		BF_SET(ram_map[t + i].flags, PGF_UNIT, PM_UNIT_SECTION);
+		ram_map[t + i].u0.ref = 1;
 	}
 
 	/* After this point, the pm_ram_alloc and pm_ram_free routines
