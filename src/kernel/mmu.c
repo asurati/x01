@@ -380,8 +380,14 @@ int mmu_unmap(const struct mmu_map_req *r)
 
 			/* The PDE must point to a PT. */
 			assert(k == 1);
-			pa = BF_PULL(pd[j], PDE_PT_BASE);
-			pt = mmu_slub_pa_to_va(pa);
+			if (j >= 0x400 && j < 0x404) {
+				pt = (uintptr_t*)&k_pt_start;
+				pt += (j - 0x400) * 0x100;
+			} else {
+				pa = BF_PULL(pd[j], PDE_PT_BASE);
+				pt = mmu_slub_pa_to_va(pa);
+			}
+
 			pt = &pt[BF_GET(va, VA_PTE_IX)];
 
 			/* TODO: dec refcount on the frames. */
