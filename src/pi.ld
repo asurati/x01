@@ -101,10 +101,7 @@ SECTIONS
 	mmu_slub_area = .;
 	. += 0x1000;
 
-	/* Page Tables area. */
-	pt_start = .;
-	. += 0x400000;
-
+	. = ALIGN(0x100000);
 	/* struct page array for RAM. Reserve 1MB VA space to allow us to
 	 * be flexible with the size of the struct.
 	 */
