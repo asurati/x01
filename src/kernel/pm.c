@@ -50,6 +50,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 		{(uintptr_t)&data_start,	(uintptr_t)&data_end},
 		{(uintptr_t)&bss_start,		(uintptr_t)&bss_end},
 		{(uintptr_t)&ptab_start,	(uintptr_t)&ptab_end},
+		/* TODO add excpt_start PAGE. */
 	};
 
 	mutex_init(&ram_map_lock);
