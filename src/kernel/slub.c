@@ -498,7 +498,7 @@ void kfree(void *p)
 
 	BF_CLR(t, SLUB_LEADER);
 
-	i = BF_GET(pg->flags, PGF_SLUB_LSIZE);
+	i = BF_GET(pg->flags, PGF_SLUB_LSIZE) - SLUB_SUBPAGE_START;
 
 	if (i >= SLUB_SUBPAGE_NSIZES)
 		kfree_fullpages(p, &fullpages[i - SLUB_SUBPAGE_NSIZES], pg, pa,
