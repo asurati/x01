@@ -41,17 +41,18 @@ void vm_init()
 {
 	int i;
 	struct vm_seg *slabs;
+	extern char vm_slub_end;
 
 	for (i = 0; i < VMA_MAX; ++i) {
 		init_list_head(&vm_areas[i]);
 		mutex_init(&vm_areas_lock[i]);
 	}
 
-	/* The first 9 pages of vm_slub area are utilized as slabs. */
+	/* The last 9 pages of vm_slub area are utilized as slabs. */
 	slabs = kmalloc(sizeof(*slabs));
 	memset(slabs, 0, sizeof(*slabs));
 
-	slabs->start = &vm_slub_start;
+	slabs->start = &vm_slub_end - (9 << PAGE_SIZE_SZ);;
 	BF_SET(slabs->flags, VSF_NPAGES, 9);
 
 	list_add(&slabs->entry, &vm_areas[VMA_SLUB]);
