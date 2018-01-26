@@ -21,10 +21,17 @@
 #include <string.h>
 #include <mutex.h>
 #include <barrier.h>
+#include <slub.h>
+#include <uart.h>
+
+extern void *mmu_slub_alloc();
+extern void  mmu_slub_free(void *p);
+extern void *mmu_slub_pa_to_va(uintptr_t pa);
 
 extern char KMODE_VA;
-extern char pt_start;
 extern char k_pd_start;
+extern char k_pt_start;
+
 /* Since a mutex is being used to protect k_pd, the callers of
  * map/unmap/va_to_pa routines must ensure that they are running
  * at process context.
@@ -32,7 +39,6 @@ extern char k_pd_start;
 static struct mutex k_pd_lock;
 
 const uintptr_t kmode_va = (uintptr_t)&KMODE_VA;
-const uintptr_t pt_area_va = (uintptr_t)&pt_start;
 
 /* The values correspond to mmu_map_unit. */
 static const enum pm_alloc_units map_units[MAP_UNIT_MAX] = {
@@ -42,14 +48,7 @@ static const enum pm_alloc_units map_units[MAP_UNIT_MAX] = {
 	PM_UNIT_SUPER_SECTION
 };
 
-/* VA to PTE VA. */
-static void *get_pte_va(const void *va)
-{
-	uintptr_t r;
-	r  = pt_area_va;
-	r += ((uintptr_t)va >> PAGE_SIZE_SZ) << 2;
-	return (void *)r;
-}
+const int pm_alloc_nunits[4] = {1, 16, 1, 16};
 
 void mmu_tlb_invalidate(void *va, size_t sz)
 {
@@ -119,11 +118,7 @@ void mmu_tlb_invalidate(void *va, size_t sz)
 void mmu_init()
 {
 	uint32_t v;
-	uintptr_t *pd, *pt, pa, te;
-	void *va;
-	extern char k_pt_pa;
-	extern char ram_map_start;
-	extern char ram_map_pt_pa;
+	uintptr_t *pd;
 
 	/* Disable the table walk for TTBR0. */
 	asm volatile("mrc	p15, 0, %0, c2, c0, 2\n\t"
@@ -139,50 +134,168 @@ void mmu_init()
 	mmu_dcache_clean(pd, 4 * sizeof(uintptr_t));
 	mmu_tlb_invalidate(NULL, 1024 * PAGE_SIZE);
 
-	/* Map k_pt at its appropriate VA witin the PT area. */
-
-	/* va is the calculated PTE VA of the PT mapping
-	 * kmode_va.
-	 */
-	va = get_pte_va((void *)kmode_va);
-
-	/* pt is the calculated PTE VA of the PT mapping
-	 * k_pt.
-	 */
-	pt = get_pte_va(va);
-	pa = (uintptr_t)&k_pt_pa;
-
-	te = 0;
-	BF_SET(te, PTE_TYPE, 2);        /* Small Page. */
-	BF_SET(te, PTE_AP, 1);          /* Supervisor-only. */
-	BF_SET(te, PTE_SP_XN, 1);       /* No Execute. */
-	BF_SET(te, PTE_C, 1);           /* I/O WB, AoW. */
-	BF_SET(te, PTE_B, 1);
-	BF_SET(te, PTE_SP_TEX, 1);
-	BF_PUSH(te, PTE_SP_BASE, pa);
-	pt[0] = te;
-	mmu_dcache_clean(pt, sizeof(uintptr_t));
-
-	/* Map the ram map PT at the appropriate location. */
-	va = get_pte_va(&ram_map_start);
-	pt = get_pte_va(va);
-	pa = (uintptr_t)&ram_map_pt_pa;
-
-	BF_CLR(te, PTE_SP_BASE);
-	BF_PUSH(te, PTE_SP_BASE, pa);
-	pt[0] = te;
-	mmu_dcache_clean(pt, sizeof(uintptr_t));
-
 	mutex_init(&k_pd_lock);
+}
+
+int mmu_map_sections(const struct mmu_map_req *r)
+{
+	int i, j, k, n;
+	uintptr_t va, pa, inc, *pd;
+	uintptr_t de;
+
+	inc = 1 << (map_units[r->mu] + PAGE_SIZE_SZ);
+
+	va = (uintptr_t)r->va_start;
+	pa = r->pa_start;
+
+	n = pm_alloc_nunits[r->mu];
+	pd = (uintptr_t *)&k_pd_start;
+	for (i = 0; i < r->n; ++i, va += inc, pa += inc) {
+		/* Prevent overflow. */
+		assert(va >= (uintptr_t)r->va_start);
+		assert(pa >= r->pa_start);
+
+		j = BF_GET(va, VA_PDE_IX);
+
+		/* Ensure that the de are invalid. */
+		for (k = 0; k < n; ++k)
+			assert(BF_GET(pd[j + k], PDE_TYPE0) == 0);
+
+		de = 0;
+		BF_SET(de, PDE_TYPE0, 2);		/* S or SS. */
+		if (r->mu == MAP_UNIT_SUPER_SECTION) {
+			BF_SET(de, PDE_TYPE1, 1);	/* SS. */
+			BF_PUSH(de, PDE_SS_BASE, pa);
+		} else {
+			BF_SET(de, PDE_DOM, r->domain & 0xf);
+			BF_PUSH(de, PDE_S_BASE, pa);
+		}
+
+		if (!r->exec)
+			BF_SET(de, PDE_XN, 1);
+		if (r->shared)
+			BF_SET(de, PDE_SHR, 1);
+		if (!r->global)
+			BF_SET(de, PDE_NG, 1);
+
+		BF_SET(de, PDE_TEX, (r->mt >> 2) & 7);
+		BF_SET(de, PDE_C, (r->mt >> 1) & 1);
+		BF_SET(de, PDE_B, r->mt & 1);
+		BF_SET(de, PDE_APX, (r->ap >> 2) & 1);
+		BF_SET(de, PDE_AP, r->ap & 3);
+
+		for (k = 0; k < n; ++k)
+			pd[j + k] = de;
+
+		mmu_dcache_clean(&pd[j], n * sizeof(uintptr_t));
+
+		mmu_tlb_invalidate((void *)va, inc);
+	}
+	return 0;
+}
+
+int mmu_map_pages(const struct mmu_map_req *r)
+{
+	int i, j, k, n;
+	uintptr_t va, pa, inc, *pd, *pt, tpa;
+	uintptr_t de, te;
+
+	inc = 1 << (map_units[r->mu] + PAGE_SIZE_SZ);
+
+	va = (uintptr_t)r->va_start;
+	pa = r->pa_start;
+
+	n = pm_alloc_nunits[r->mu];
+	pd = (uintptr_t *)&k_pd_start;
+	for (i = 0; i < r->n; ++i, va += inc, pa += inc) {
+		/* Prevent overflow. */
+		assert(va >= (uintptr_t)r->va_start);
+		assert(pa >= r->pa_start);
+
+		j = BF_GET(va, VA_PDE_IX);
+		k = BF_GET(pd[j], PDE_TYPE0);
+
+		/* The PDE must be either empty or pointing to a PT.
+		 * It must not be busy mapping section/super-section.
+		 */
+		assert(k == 0 || k == 1);
+
+		/* If the PDE is empty, assign and map a new PT to map
+		 * the page/large-page.
+		 */
+		if (k == 0) {
+			mutex_unlock(&k_pd_lock);
+			pt = mmu_slub_alloc();
+			tpa = mmu_va_to_pa(pt);
+			mutex_lock(&k_pd_lock);
+
+			memset(pt, 0, 1024);
+			mmu_dcache_clean(pt, 1024);
+
+			de = 0;
+			BF_SET(de, PDE_TYPE0, 1);
+			BF_PUSH(de, PDE_PT_BASE, tpa);
+			pd[j] = de;
+			mmu_dcache_clean(&pd[j], sizeof(uintptr_t));
+		} else {
+			/* k_pt is statically allocated, and manages
+			 * the 4MB region starting at 0x40000000.
+			 */
+			if (j >= 0x400 && j < 0x404) {
+				pt = (uintptr_t*)&k_pt_start;
+				pt += (j - 0x400) * 0x100;
+			} else {
+
+				tpa = BF_PULL(pd[j], PDE_PT_BASE);
+				pt = mmu_slub_pa_to_va(tpa);
+			}
+		}
+
+		pt = &pt[BF_GET(va, VA_PTE_IX)];
+
+		/* Ensure that the PTEs are invalid. */
+		for (k = 0; k < n; ++k)
+			assert(BF_GET(pt[k], PTE_TYPE) == 0);
+
+		te = 0;
+		if (r->mu == MAP_UNIT_LARGE_PAGE) {
+			BF_SET(te, PTE_TYPE, 1);
+			BF_PUSH(te, PTE_LP_BASE, pa);
+			if (!r->exec)
+				BF_SET(te, PTE_LP_XN, 1);
+			BF_SET(te, PTE_LP_TEX, (r->mt >> 2) & 7);
+		} else {
+			BF_SET(te, PTE_TYPE, 2);
+			BF_PUSH(te, PTE_SP_BASE, pa);
+			if (!r->exec)
+				BF_SET(te, PTE_SP_XN, 1);
+			BF_SET(te, PTE_SP_TEX, (r->mt >> 2) & 7);
+		}
+
+		if (r->shared)
+			BF_SET(te, PTE_SHR, 1);
+		if (!r->global)
+			BF_SET(te, PTE_NG, 1);
+
+		BF_SET(te, PTE_C, (r->mt >> 1) & 1);
+		BF_SET(te, PTE_B, r->mt & 1);
+		BF_SET(te, PTE_APX, (r->ap >> 2) & 1);
+		BF_SET(te, PTE_AP, r->ap & 3);
+
+		for (k = 0; k < n; ++k)
+			pt[k] = te;
+
+		mmu_dcache_clean(pt, n * sizeof(uintptr_t));
+
+		mmu_tlb_invalidate((void *)va, inc);
+	}
+	return 0;
 }
 
 int mmu_map(const struct mmu_map_req *r)
 {
-	int i, j, k, n, ret;
-	const int nunits[4] = {1, 16, 1, 16};
-	uintptr_t mask, va, pa, inc, *pd, tva, tpa, *pt;
-	uintptr_t de, te;
-	struct mmu_map_req tr;
+	int ret;
+	uintptr_t mask, va, pa, inc;
 
 	assert(r && r->n > 0);
 	assert(r->mt < MT_MAX);
@@ -190,7 +303,6 @@ int mmu_map(const struct mmu_map_req *r)
 	assert(r->mu < MAP_UNIT_MAX);
 
 	mutex_lock(&k_pd_lock);
-	pd = (uintptr_t *)&k_pd_start;
 
 	/* The addresses must be aligned corresponding to the unit
 	 * requested.
@@ -204,167 +316,21 @@ int mmu_map(const struct mmu_map_req *r)
 	assert((va & mask) == 0);
 	assert((pa & mask) == 0);
 
-	n = nunits[r->mu];
 
-	if (r->mu == MAP_UNIT_SECTION || r->mu == MAP_UNIT_SUPER_SECTION) {
-		for (i = 0; i < r->n; ++i, va += inc, pa += inc) {
-			/* Prevent overflow. */
-			assert(va >= (uintptr_t)r->va_start);
-			assert(pa >= r->pa_start);
-
-			mmu_tlb_invalidate((void *)va, inc);
-
-			j = BF_GET(va, VA_PDE_IX);
-
-			/* Ensure that the de are invalid. */
-			for (k = 0; k < n; ++k)
-				assert(BF_GET(pd[j + k], PDE_TYPE0) == 0);
-
-			de = 0;
-			BF_SET(de, PDE_TYPE0, 2);		/* S or SS. */
-			if (r->mu == MAP_UNIT_SUPER_SECTION) {
-				BF_SET(de, PDE_TYPE1, 1);	/* SS. */
-				BF_PUSH(de, PDE_SS_BASE, pa);
-			} else {
-				BF_SET(de, PDE_DOM, r->domain & 0xf);
-				BF_PUSH(de, PDE_S_BASE, pa);
-			}
-
-			if (!r->exec)
-				BF_SET(de, PDE_XN, 1);
-			if (r->shared)
-				BF_SET(de, PDE_SHR, 1);
-			if (!r->global)
-				BF_SET(de, PDE_NG, 1);
-
-			BF_SET(de, PDE_TEX, (r->mt >> 2) & 7);
-			BF_SET(de, PDE_C, (r->mt >> 1) & 1);
-			BF_SET(de, PDE_B, r->mt & 1);
-			BF_SET(de, PDE_APX, (r->ap >> 2) & 1);
-			BF_SET(de, PDE_AP, r->ap & 3);
-
-			for (k = 0; k < n; ++k)
-				pd[j + k] = de;
-
-			mmu_dcache_clean(&pd[j], n * sizeof(uintptr_t));
-		}
-	} else {
-		for (i = 0; i < r->n; ++i, va += inc, pa += inc) {
-			/* Prevent overflow. */
-			assert(va >= (uintptr_t)r->va_start);
-			assert(pa >= r->pa_start);
-
-			mmu_tlb_invalidate((void *)va, inc);
-
-			/* We link a PAGE_SIZE page as a PT at the 4MB
-			 * boundary. Check if the de has a valid PT
-			 * populated.
-			 */
-			tva = ALIGN_DN(va, 4 * 1024 * 1024);
-			j = BF_GET(tva, VA_PDE_IX);
-
-			k = BF_GET(pd[j], PDE_TYPE0);
-			assert(k == 0 || k == 1);
-
-			/* All 4 de must be either empty or filled with PT. */
-			if (k == 0) {
-				assert(BF_GET(pd[j + 0], PDE_TYPE0) == 0);
-				assert(BF_GET(pd[j + 1], PDE_TYPE0) == 0);
-				assert(BF_GET(pd[j + 2], PDE_TYPE0) == 0);
-				assert(BF_GET(pd[j + 3], PDE_TYPE0) == 0);
-			} else {
-				tpa = BF_PULL(pd[j + 0], PDE_PT_BASE);
-
-				/* The 0th de's PT must be PAGE aligned. */
-				assert(ALIGNED(tpa, PAGE_SIZE));
-				assert(BF_PULL(pd[j + 1], PDE_PT_BASE) ==
-				       tpa + 0x400);
-				assert(BF_PULL(pd[j + 2], PDE_PT_BASE) ==
-				       tpa + 0x400 * 2);
-				assert(BF_PULL(pd[j + 3], PDE_PT_BASE) ==
-				       tpa + 0x400 * 3);
-			}
-
-			/* If the de are empty, assign and map a new PT. */
-			if (k == 0) {
-				memset(&tr, 0, sizeof(tr));
-				tr.n = 1;
-				tr.va_start = get_pte_va((void *)tva);
-				assert(ALIGNED((uintptr_t)tr.va_start,
-					       PAGE_SIZE));
-
-				ret = pm_ram_alloc(PM_UNIT_PAGE,
-						   PGF_USE_NORMAL, 1,
-						   &tr.pa_start);
-				assert(ret == 0);
-
-				tr.global = 1;
-				tr.mt = MT_NRM_WBA;
-				tr.ap = AP_SRW;
-				tr.mu = MAP_UNIT_PAGE;
-				mutex_unlock(&k_pd_lock);
-				ret = mmu_map(&tr);
-				assert(ret == 0);
-				mutex_lock(&k_pd_lock);
-				memset(tr.va_start, 0, PAGE_SIZE);
-				mmu_dcache_clean(tr.va_start, PAGE_SIZE);
-
-				for (k = 0; k < 4; ++k) {
-					de = 0;
-					BF_SET(de, PDE_TYPE0, 1);
-					BF_PUSH(de, PDE_PT_BASE, tr.pa_start);
-					pd[j + k] = de;
-					tr.pa_start += 0x400;
-				}
-				mmu_dcache_clean(&pd[j], 4 * sizeof(uintptr_t));
-			}
-
-			pt = get_pte_va((void *)va);
-
-			/* Ensure that the te are invalid. */
-			for (k = 0; k < n; ++k)
-				assert(BF_GET(pt[k], PTE_TYPE) == 0);
-
-			te = 0;
-			if (r->mu == MAP_UNIT_LARGE_PAGE) {
-				BF_SET(te, PTE_TYPE, 1);
-				BF_PUSH(te, PTE_LP_BASE, pa);
-				if (!r->exec)
-					BF_SET(te, PTE_LP_XN, 1);
-				BF_SET(te, PTE_LP_TEX, (r->mt >> 2) & 7);
-			} else {
-				BF_SET(te, PTE_TYPE, 2);
-				BF_PUSH(te, PTE_SP_BASE, pa);
-				if (!r->exec)
-					BF_SET(te, PTE_SP_XN, 1);
-				BF_SET(te, PTE_SP_TEX, (r->mt >> 2) & 7);
-			}
-
-			if (r->shared)
-				BF_SET(te, PTE_SHR, 1);
-			if (!r->global)
-				BF_SET(te, PTE_NG, 1);
-
-			BF_SET(te, PTE_C, (r->mt >> 1) & 1);
-			BF_SET(te, PTE_B, r->mt & 1);
-			BF_SET(te, PTE_APX, (r->ap >> 2) & 1);
-			BF_SET(te, PTE_AP, r->ap & 3);
-
-			for (k = 0; k < n; ++k)
-				pt[k] = te;
-
-			mmu_dcache_clean(pt, n * sizeof(uintptr_t));
-		}
-	}
+	if (r->mu == MAP_UNIT_SECTION || r->mu == MAP_UNIT_SUPER_SECTION)
+		ret = mmu_map_sections(r);
+	else
+		ret = mmu_map_pages(r);
 	mutex_unlock(&k_pd_lock);
-	return 0;
+
+	return ret;
 }
 
 int mmu_unmap(const struct mmu_map_req *r)
 {
 	int i, j, k, n;
 	const int nunits[4] = {1, 16, 1, 16};
-	uintptr_t mask, va, pa, inc, *pd, tva, tpa, *pt;
+	uintptr_t mask, va, pa, inc, *pd, *pt;
 
 	assert(r && r->n > 0);
 	assert(r->mu < MAP_UNIT_MAX);
@@ -409,29 +375,14 @@ int mmu_unmap(const struct mmu_map_req *r)
 
 			mmu_tlb_invalidate((void *)va, inc);
 
-			/* We link a PAGE_SIZE page as a PT at the 4MB
-			 * boundary. Check if the de has a valid PT
-			 * populated.
-			 */
-			tva = ALIGN_DN(va, 4 * 1024 * 1024);
-			j = BF_GET(tva, VA_PDE_IX);
-
+			j = BF_GET(va, VA_PDE_IX);
 			k = BF_GET(pd[j], PDE_TYPE0);
+
+			/* The PDE must point to a PT. */
 			assert(k == 1);
-
-			/* All 4 de must be filled with PT. */
-			tpa = BF_PULL(pd[j + 0], PDE_PT_BASE);
-
-			/* The 0th de's PT must be PAGE aligned. */
-			assert(ALIGNED(tpa, PAGE_SIZE));
-			assert(BF_PULL(pd[j + 1], PDE_PT_BASE) ==
-			       tpa + 0x400);
-			assert(BF_PULL(pd[j + 2], PDE_PT_BASE) ==
-			       tpa + 0x400 * 2);
-			assert(BF_PULL(pd[j + 3], PDE_PT_BASE) ==
-			       tpa + 0x400 * 3);
-
-			pt = get_pte_va((void *)va);
+			pa = BF_PULL(pd[j], PDE_PT_BASE);
+			pt = mmu_slub_pa_to_va(pa);
+			pt = &pt[BF_GET(va, VA_PTE_IX)];
 
 			/* TODO: dec refcount on the frames. */
 
@@ -451,13 +402,13 @@ uintptr_t mmu_va_to_pa(const void *p)
 {
 	int i, j;
 	const uintptr_t *pd;
-	uintptr_t va, tva, pa, *pt;
+	uintptr_t va, pa, *pt;
 
 	mutex_lock(&k_pd_lock);
 	pd = (uintptr_t *)&k_pd_start;
 
-	tva = (uintptr_t)p;
-	va = ALIGN_DN(tva, PAGE_SIZE);
+	va = (uintptr_t)p;
+
 	i = BF_GET(va, VA_PDE_IX);
 	j = BF_GET(pd[i], PDE_TYPE0);
 
@@ -467,26 +418,34 @@ uintptr_t mmu_va_to_pa(const void *p)
 		j = BF_GET(pd[i], PDE_TYPE1);
 		if (j == 0) {
 			pa = BF_PULL(pd[i], PDE_S_BASE);
-			pa += tva & ~BF_SMASK(PDE_S_BASE);
+			pa += va & ~BF_SMASK(PDE_S_BASE);
 		} else {
 			pa = BF_PULL(pd[i], PDE_SS_BASE);
-			pa += tva & ~BF_SMASK(PDE_SS_BASE);
+			pa += va & ~BF_SMASK(PDE_SS_BASE);
 		}
 		goto exit;
 	}
 
-	/* Since the VA is mapped through a page table, we can assume that
-	 * the PT is accessible.
-	 */
-	pt = get_pte_va(p);
+	if (i >= 0x400 && i < 0x404) {
+		pt = (uintptr_t*)&k_pt_start;
+		pt += (i - 0x400) * 0x100;
+	} else {
+
+		pa = BF_PULL(pd[i], PDE_PT_BASE);
+		pt = mmu_slub_pa_to_va(pa);
+	}
+
+	pt = &pt[BF_GET(va, VA_PTE_IX)];
+
 	j = BF_GET(pt[0], PTE_TYPE);
 	assert(j);
+
 	if (j == 1) {
 		pa = BF_PULL(pt[0], PTE_LP_BASE);
-		pa += tva & ~BF_SMASK(PTE_LP_BASE);
+		pa += va & ~BF_SMASK(PTE_LP_BASE);
 	} else {
 		pa = BF_PULL(pt[0], PTE_SP_BASE);
-		pa += tva & (~BF_SMASK(PTE_SP_BASE));
+		pa += va & (~BF_SMASK(PTE_SP_BASE));
 	}
 exit:
 	mutex_unlock(&k_pd_lock);

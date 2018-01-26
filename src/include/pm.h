@@ -70,8 +70,8 @@ enum pm_page_usage {
 #define PGF_USE_SZ			1
 
 /* Only valid if PGF_USE_SLUB is true. */
-#define PGF_SLUB_SIZE_POS		5
-#define PGF_SLUB_SIZE_SZ		5
+#define PGF_SLUB_LSIZE_POS		5
+#define PGF_SLUB_LSIZE_SZ		5
 
 struct page {
 	uint32_t flags;

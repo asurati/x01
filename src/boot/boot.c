@@ -28,6 +28,7 @@ extern char rodata_start, rodata_end;
 extern char data_start, data_end;
 extern char bss_start, bss_end;
 extern char k_pd_start, k_pd_end;
+extern char k_pt_start, k_pt_end;
 
 /* rwx == 4 2 1. */
 static const struct section si[] = {
@@ -36,6 +37,7 @@ static const struct section si[] = {
 	{(uintptr_t)&data_start,	(uintptr_t)&data_end,	6},
 	{(uintptr_t)&bss_start,		(uintptr_t)&bss_end,	6},
 	{(uintptr_t)&k_pd_start,	(uintptr_t)&k_pd_end,	6},
+	{(uintptr_t)&k_pt_start,	(uintptr_t)&k_pt_end,	6},
 };
 
 /* Zero the kernel page directory and table.
@@ -50,16 +52,7 @@ void boot_map()
 	uintptr_t pa, va, kmode_va;
 	extern char k_pd_pa;
 	extern char k_pt_pa;
-	extern char k_pta_pt_pa;
-	extern char pt_start;
-	extern char ram_map_pt_pa;
-	extern char ram_map_start;
 	extern char KMODE_VA;
-
-	pt = (uintptr_t *)&k_pta_pt_pa;
-	sz = PAGE_SIZE;
-	for (i = 0; i < sz >> 2; ++i)
-		pt[i] = 0;
 
 	pt = (uintptr_t *)&k_pt_pa;
 	sz = PAGE_SIZE;
@@ -84,45 +77,6 @@ void boot_map()
 		BF_SET(de, PDE_TEX, 1);
 		pd[i] = de;
 	}
-
-	/* Fill in the PDEs for the 4MB PT area. */
-	va = (uintptr_t)&pt_start;
-	j = BF_GET(va, VA_PDE_IX);
-	pa = (uintptr_t)&k_pta_pt_pa;
-	for (i = 0; i < 4; ++i, pa += 0x400) {
-		de = 0;
-		BF_SET(de, PDE_TYPE0, 1);
-		BF_PUSH(de, PDE_PT_BASE, pa);
-		pd[i + j] = de;
-	}
-
-	/* Fill in the PDEs for the ram map PT . */
-	va = (uintptr_t)&ram_map_start;
-	j = BF_GET(va, VA_PDE_IX);
-	pa = (uintptr_t)&ram_map_pt_pa;
-	for (i = 0; i < 4; ++i, pa += 0x400) {
-		de = 0;
-		BF_SET(de, PDE_TYPE0, 1);
-		BF_PUSH(de, PDE_PT_BASE, pa);
-		pd[i + j] = de;
-	}
-
-	/* The recursive mapping page VA for the current settings is
-	 * 0x40902000, whose PTE is located within itself at 0x40902408.
-	 * The VA 0x40902000 then correponds to the PT area PT k_pta_pt_pa.
-	 * Hence, the offset 0x408 must contain the pa.
-	 */
-	pa = (uintptr_t)&k_pta_pt_pa;
-	pt = (void *)(pa + 0x408);
-	te = 0;
-	BF_SET(te, PTE_TYPE, 2);	/* Small Page. */
-	BF_SET(te, PTE_AP, 1);		/* Supervisor-only. */
-	BF_SET(te, PTE_SP_XN, 1);	/* No Execute. */
-	BF_SET(te, PTE_C, 1);		/* I/O WB, AoW. */
-	BF_SET(te, PTE_B, 1);
-	BF_SET(te, PTE_SP_TEX, 1);
-	BF_PUSH(te, PTE_SP_BASE, pa);
-	pt[0]  = te;
 
 	/* First 4MB RAM mapped to first 4MB @ KMODE_VA using small pages. */
 	kmode_va = (uintptr_t)&KMODE_VA;

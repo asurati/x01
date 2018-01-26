@@ -20,6 +20,7 @@ ENTRY(start)
 
 /* Corresponds to the TTBCR.N setting. */
 KMODE_VA = 0x40000000;
+KRNL_SZ = 0x400000;
 
 SECTIONS
 {
@@ -75,16 +76,14 @@ SECTIONS
 		. += 0x4000;
 		k_pd_end = .;
 
+		/* k_pt must be a multiple of PAGE_SIZE,
+		 * in order that the rest of the code can
+		 * utilize subpage sized PTs.
+		 */
+		k_pt_start = .;
 		k_pt_pa = . - KMODE_VA;
 		. += 0x1000;
-
-		/* 4MB pt area's pt. */
-		k_pta_pt = .;
-		k_pta_pt_pa = . - KMODE_VA;
-		. += 0x1000;
-
-		ram_map_pt_pa = . - KMODE_VA;
-		. += 0x1000;
+		k_pt_end = .;
 		ptab_end = .;
 	}
 
@@ -95,16 +94,16 @@ SECTIONS
 	 * except the exception vector.
 	 */
 
-	. = ASSERT(. < (KMODE_VA + 0x800000), "kernel too big.");
+	/* Allow the kernel binary to grow about 4MB. */
+	. = ASSERT(. < (KMODE_VA + KRNL_SZ - 0x1000), "kernel too big.");
 
-	/* Allow the kernel binary to grow about 8MB. */
-	. = KMODE_VA + 0x800000;
+	. = KMODE_VA + KRNL_SZ - 0x1000;
+	mmu_slub_area = .;
+	. += 0x1000;
 
 	/* Page Tables area. */
 	pt_start = .;
 	. += 0x400000;
-
-	/* KMODE_VA + 0xc00000. */
 
 	/* struct page array for RAM. Reserve 1MB VA space to allow us to
 	 * be flexible with the size of the struct.
@@ -116,6 +115,7 @@ SECTIONS
 	vm_slub_start = .;
 
 	. = 0xf8000000;
+	vm_slub_end = .;
 	vm_dev_start = .;
 
 	/* High Vectors. */
