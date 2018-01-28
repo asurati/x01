@@ -16,21 +16,29 @@
  */
 
 #include <assert.h>
-#include <mmu.h>
-#include <pm.h>
 #include <slub.h>
-#include <vm.h>
-#include <io.h>
-#include <intc.h>
-#include <excpt.h>
-#include <irq.h>
-#include <timer.h>
 #include <sched.h>
-#include <mbox.h>
+#include <irq.h>
 #include <fb.h>
 #include <list.h>
 #include <string.h>
 #include <uart.h>
+
+void sched_current_init();
+void sched_init();
+void mmu_init();
+void pm_init(uint32_t ram, uint32_t ramsz);
+void io_init();
+void slub_init();
+void vm_init();
+void excpt_init();
+void intc_init();
+void irq_init();
+void timer_init();
+void timer_start();
+void mbox_init();
+void fb_init();
+void uart_init();
 
 #ifdef QRPI2
 

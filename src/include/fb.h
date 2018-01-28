@@ -27,7 +27,5 @@ struct fb_info {
 	size_t sz;
 };
 
-void	fb_init();
 int	fb_info_get(struct fb_info *);
-
 #endif

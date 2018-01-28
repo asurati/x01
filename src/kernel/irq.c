@@ -17,7 +17,7 @@
 
 #include <assert.h>
 #include <irq.h>
-#include <sched.h>
+#include <sys/sched.h>
 
 struct irq {
 	irq_fn fn;

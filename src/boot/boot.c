@@ -16,6 +16,7 @@
  */
 
 #include <mmu.h>
+#include <sys/mmu.h>
 
 struct section {
 	uintptr_t start;

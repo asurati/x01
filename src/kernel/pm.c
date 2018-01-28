@@ -16,10 +16,13 @@
  */
 
 #include <assert.h>
+#include <bdy.h>
 #include <mmu.h>
 #include <pm.h>
 #include <string.h>
 #include <mutex.h>
+
+#include <sys/mmu.h>
 
 static struct bdy bdy_ram;
 static struct page *ram_map;

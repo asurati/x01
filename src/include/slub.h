@@ -26,7 +26,6 @@
  * 8M,16M,32M,64M
  */
 
-void	slub_init();
 void	*kmalloc(size_t sz);
 void	kfree(void *p);
 #endif

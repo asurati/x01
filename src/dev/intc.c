@@ -16,7 +16,6 @@
  */
 
 #include <io.h>
-#include <intc.h>
 
 #define INTC_BASE			0xb200
 

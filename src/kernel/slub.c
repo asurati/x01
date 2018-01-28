@@ -110,13 +110,6 @@ static struct subpage_slab mmu_pt_slab;
 static struct subpage mmu_pt_subpages;
 static struct subpage subpages[SLUB_SUBPAGE_NSIZES];
 static struct fullpage fullpages[SLUB_FULLPAGE_NSIZES];
-/*
-static struct list_head subpage_full_heads[SLUB_SUBPAGE_NSIZES];
-static struct list_head subpage_part_heads[SLUB_SUBPAGE_NSIZES];
-static struct list_head subpage_none_heads[SLUB_SUBPAGE_NSIZES];
-static struct list_head fullpage_heads[SLUB_FULLPAGE_NSIZES];
-static struct mutex slub_locks[SLUB_NSIZES];
-*/
 
 static void slub_subpage_init0(struct subpage *sp, int log_sz)
 {

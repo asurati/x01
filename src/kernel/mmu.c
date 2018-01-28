@@ -24,9 +24,8 @@
 #include <slub.h>
 #include <uart.h>
 
-extern void *mmu_slub_alloc();
-extern void  mmu_slub_free(void *p);
-extern void *mmu_slub_pa_to_va(uintptr_t pa);
+#include <sys/mmu.h>
+#include <sys/slub.h>
 
 extern char KMODE_VA;
 extern char k_pd_start;

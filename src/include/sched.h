@@ -27,11 +27,6 @@
 #define THRD_STATE_WAKING		4
 #define THRD_STATE_MUTEX_WAITING	5
 
-#define THRD_QUOTA			5
-
-#define	SCHED_RET_SWITCH		1
-#define	SCHED_RET_RUN			2
-
 /* thread.ticks: Accesses need sync with soft IRQs.
  * thread.state: Accesses need sync with scheduler.
  */
@@ -50,22 +45,10 @@ struct thread {
 
 extern struct thread *current;
 
-struct context {
-	uintptr_t is_fresh;
-	uintptr_t cpsr;
-	uintptr_t reg[13];
-	uintptr_t lr;
-};
-
 /* Should we add barrier here? */
 #define set_current_state(s)						\
 	do {								\
 		current->state = (s);					\
-	} while (0)
-
-#define set_current_irq_ctx(v)						\
-	do {								\
-		current->in_irq_ctx = v;				\
 	} while (0)
 
 /* Disable/Enable provide acquire/release semantics on
@@ -140,9 +123,6 @@ static inline void irq_sched_enable()
 
 typedef int (*thread_fn)(void *p);
 
-void		sched_init();
-void		sched_current_init();
-void		sched_timer_tick();
 struct thread	*sched_thread_create(thread_fn fn, void *p);
 void		wake_up(struct list_head *wq);
 int		schedule();

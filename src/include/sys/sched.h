@@ -15,9 +15,29 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _TIMER_H_
-#define _TIMER_H_
+#ifndef _SYS_SCHED_H_
+#define _SYS_SCHED_H_
 
-void	timer_init();
-void	timer_start();
+#include <list.h>
+
+#define THRD_QUOTA			5
+
+#define	SCHED_RET_SWITCH		1
+#define	SCHED_RET_RUN			2
+
+struct context {
+	uintptr_t is_fresh;
+	uintptr_t cpsr;
+	uintptr_t reg[13];
+	uintptr_t lr;
+};
+
+/* Should we add barrier here? */
+#define set_current_irq_ctx(v)						\
+	do {								\
+		current->in_irq_ctx = v;				\
+	} while (0)
+
+void		sched_timer_tick();
+void		sched_switch();
 #endif

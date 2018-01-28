@@ -37,6 +37,4 @@ static inline void writel(uint32_t val, volatile void *addr)
 	*(volatile uint32_t *)addr = val;
 
 }
-
-void	io_init();
 #endif

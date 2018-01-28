@@ -18,10 +18,11 @@
 #include <assert.h>
 #include <irq.h>
 #include <mmu.h>
-#include <sched.h>
 #include <slub.h>
 #include <string.h>
 #include <mutex.h>
+
+#include <sys/sched.h>
 
 static struct list_head ready;
 struct thread *current;
@@ -170,7 +171,7 @@ int schedule()
 	return ret;
 }
 
-void wake_up_preempt_disabled(struct list_head *wq)
+static void wake_up_preempt_disabled(struct list_head *wq)
 {
 	int queue_sched_irq;
 	struct list_head *e;

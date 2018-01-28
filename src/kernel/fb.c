@@ -16,6 +16,8 @@
  */
 
 #include <assert.h>
+#include <mmu.h>
+
 #include <mbox.h>
 #include <vm.h>
 #include <string.h>

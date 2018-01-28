@@ -18,7 +18,8 @@
 #ifndef _UART_H_
 #define _UART_H_
 
-void	uart_init();
+#include <types.h>
+
 void	uart_send(char c);
 void	uart_send_num(uint32_t v);
 void	uart_send_str(const char *s);

@@ -16,7 +16,7 @@
  */
 
 #include <irq.h>
-#include <sched.h>
+#include <sys/sched.h>
 
 /* Internal API for timer implementation. */
 char		timer_is_asserted();

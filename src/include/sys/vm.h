@@ -15,8 +15,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _INTC_H_
-#define _INTC_H_
+#ifndef _SYS_VM_H_
+#define _SYS_VM_H_
 
-void	intc_init();
+#include <list.h>
+
+#define VSF_AP_POS		 0
+#define VSF_AP_SZ		 3
+#define VSF_MT_POS		 3
+#define VSF_MT_SZ		 5
+#define VSF_NPAGES_POS		12
+#define VSF_NPAGES_SZ		20
+
+/* For now, the vm calls support allocation and deallocation within the
+ * two 128MB region starting at vm_slub_start.
+ */
+#define VM_AREA_SIZE	(128 * 1024 * 1024)
+
+struct vm_seg {
+	struct list_head entry;
+	void *start;
+	uint32_t flags;
+};
 #endif

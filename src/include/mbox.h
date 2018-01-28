@@ -62,7 +62,6 @@ struct mbox_fb_buf {
 #define MBOX_IOCTL_FB_ALLOC			1
 #define MBOX_IOCTL_UART_CLOCK			2
 
-void		mbox_init();
 int		mbox_io(struct io_req *r);
 int		mbox_fb_alloc(int width, int height, int depth,
 			      uintptr_t *addr, size_t *sz, int *pitch);

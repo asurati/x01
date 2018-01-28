@@ -20,6 +20,8 @@
 #include <irq.h>
 #include <sched.h>
 
+#include <sys/sched.h>
+
 extern char excpt_start;
 static const void *excpt_vec_base = &excpt_start;
 

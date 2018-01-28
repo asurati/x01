@@ -83,7 +83,6 @@ static inline void wfi()
 
 typedef int (*irq_fn)(void *data);
 
-void	irq_init();
 int	irq_hard_insert(enum irq_hard ih, irq_fn fn, void *data);
 int	irq_soft_insert(enum irq_soft is, irq_fn fn, void *data);
 int	irq_sched_insert(enum irq_sched is, irq_fn fn, void *data);

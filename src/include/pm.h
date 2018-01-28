@@ -18,8 +18,6 @@
 #ifndef _PM_H_
 #define _PM_H_
 
-#include <bdy.h>
-
 /* PM_UNIT_MAX must equal BDY_NLEVELS. */
 enum pm_alloc_units {
 	PM_UNIT_4KB,
@@ -79,10 +77,8 @@ struct page {
 		int ref;
 		void *va;		/* struct slab. */
 	} u0;
-
 };
 
-void		pm_init(uint32_t ram, uint32_t ramsz);
 int		pm_ram_alloc(enum pm_alloc_units unit, enum pm_page_usage use,
 			     int n, uintptr_t *pa);
 int		pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use,

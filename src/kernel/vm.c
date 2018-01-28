@@ -16,16 +16,13 @@
  */
 
 #include <assert.h>
+#include <mmu.h>
 #include <slub.h>
 #include <string.h>
 #include <vm.h>
 #include <mutex.h>
 
-#define VM_AREA_SIZE	(128 * 1024 * 1024)
-
-/* For now, the vm calls support allocation and deallocation within the
- * two 128MB region starting at vm_slub_start.
- */
+#include <sys/vm.h>
 
 extern char vm_slub_start;
 

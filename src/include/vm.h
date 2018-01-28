@@ -18,9 +18,6 @@
 #ifndef _VM_H_
 #define _VM_H_
 
-#include <list.h>
-#include <mmu.h>
-
 enum vm_area {
 	VMA_SLUB,
 	VMA_MAX
@@ -48,20 +45,6 @@ enum vm_alloc_units {
 #define VM_UNIT_SECTION		VM_UNIT_1MB
 #define VM_UNIT_SUPER_SECTION	VM_UNIT_16MB
 
-#define VSF_AP_POS		 0
-#define VSF_AP_SZ		 3
-#define VSF_MT_POS		 3
-#define VSF_MT_SZ		 5
-#define VSF_NPAGES_POS		12
-#define VSF_NPAGES_SZ		20
-
-struct vm_seg {
-	struct list_head entry;
-	void *start;
-	uint32_t flags;
-};
-
-void		vm_init();
 int		vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 			 void **va);
 int		vm_free(enum vm_area area, enum vm_alloc_units unit, int n,

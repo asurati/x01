@@ -15,8 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _EXCPT_H_
-#define _EXCPT_H_
+#ifndef _SYS_SLUB_H_
+#define _SYS_SLUB_H_
 
-void	excpt_init();
+#include <types.h>
+
+void	*mmu_slub_alloc();
+void	mmu_slub_free(void *p);
+void	*mmu_slub_pa_to_va(uintptr_t pa);
 #endif
