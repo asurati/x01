@@ -126,7 +126,7 @@ static void slub_map(void *va, uintptr_t pa)
 	struct mmu_map_req r;
 
 	r.n = 1;
-	r.mt = MT_NRM_WBA;
+	r.mt = MT_NRM_IO_WBA;
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_PAGE;
 	r.exec = 0;

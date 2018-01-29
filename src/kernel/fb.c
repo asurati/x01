@@ -80,7 +80,7 @@ void fb_init()
 	r.va_start = fb;
 	r.pa_start = fbi->addr;
 	r.n = sz;
-	r.mt = MT_NRM_NC;		/* Write Combining on armv6. */
+	r.mt = MT_NRM_IO_NC;		/* Write Combining on armv6. */
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_SECTION;
 	r.exec = 0;

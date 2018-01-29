@@ -116,12 +116,12 @@ enum mmu_mem_type {
 			/* TEX C B */
         MT_SO,		/* 000 0 0 */
         MT_DEV_SHR,	/* 000 0 1 */
-        MT_NRM_WTNA,	/* 000 1 0 */
-        MT_NRM_WBNA,	/* 000 1 1 */
-        MT_NRM_NC,	/* 001 0 0 */
+        MT_NRM_IO_WTNA,	/* 000 1 0 */
+        MT_NRM_IO_WBNA,	/* 000 1 1 */
+        MT_NRM_IO_NC,	/* 001 0 0 */
         MT_RES0,	/* 001 0 1 */
         MT_RES1,	/* 001 1 0 */
-        MT_NRM_WBA,	/* 001 1 1 */
+        MT_NRM_IO_WBA,	/* 001 1 1 */
         MT_DEV_NS,	/* 010 0 0 */
 	MT_MAX
 };

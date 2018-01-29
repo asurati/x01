@@ -99,7 +99,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 	r.va_start = ram_map;
 	r.pa_start = pa[0];
 	r.n = 1;
-	r.mt = MT_NRM_WBA;
+	r.mt = MT_NRM_IO_WBA;
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_SECTION;
 	r.exec = 0;

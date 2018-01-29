@@ -94,7 +94,7 @@ void excpt_init()
 	r.va_start = (void *)excpt_vec_base;
 	r.pa_start = (uintptr_t)&excpt_start_pa;
 	r.n = 1;
-	r.mt = MT_NRM_WBA;
+	r.mt = MT_NRM_IO_WBA;
 	r.ap = AP_SRO;
 	r.mu = MAP_UNIT_PAGE;
 	r.exec = 1;
