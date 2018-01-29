@@ -26,6 +26,12 @@ start:
 	mov	r0, r2
 	bl	boot_copy_atag_mem
 
+	/* Invalidate ICache, as recommended in the TRM.
+	 *  Do we need dsb() here?
+	 */
+	mov	r0, #0
+	mcr	p15, 0, r0, c7, c5, 0
+
 	/* Restrict ICache and DCache to 16KB each. Avoids page colouring. */
 	mrc	p15, 0, r0, c1, c0, 1		@ Auxiliary Control
 	orr	r0, #(1 << 6)			@ CZ bit
@@ -38,7 +44,11 @@ start:
 	mcr	p15, 0, r0, c2, c0, 2		@ TTBCR
 
 	ldr	r0, =k_pd_pa
-	orr	r0, #1				@ walk is Inner Cacheable.
+	/* Tables are stored in Non-Shared, Inner, Outer Write-back,
+	 * Write Allocate memory.
+	 */
+	orr	r0, #1				@ Inner
+	orr	r0, #(1 << 3)			@ Outer
 	mcr	p15, 0, r0, c2, c0, 0		@ TTBR0
 	mcr	p15, 0, r0, c2, c0, 1		@ TTBR1
 
@@ -47,6 +57,7 @@ start:
 	mcr	p15, 0, r0, c3, c0, 0		@ DACR
 
 	bl	boot_map
+
 
 	/* DSB to ensure completion of stores to the tables. */
 	bl	_dsb
