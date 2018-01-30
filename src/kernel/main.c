@@ -91,7 +91,7 @@ static int display_thread(void *p)
 		 * fires every second, the loop wakes up every second to change
 		 * the colour of the box.
 		 */
-		wfi();
+		msleep(1000);
 		i = !i;
 	}
 	return 0;
@@ -107,7 +107,7 @@ static int ticker_thread(void *p)
 
 	while (1) {
 		uart_send_num(ticks);
-		wfi();
+		msleep(1000);
 		++ticks;
 	}
 	return 0;

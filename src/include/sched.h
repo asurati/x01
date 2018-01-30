@@ -126,4 +126,5 @@ typedef int (*thread_fn)(void *p);
 struct thread	*sched_thread_create(thread_fn fn, void *p);
 void		wake_up(struct list_head *wq);
 int		schedule();
+void		msleep(int ms);
 #endif

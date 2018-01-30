@@ -29,17 +29,56 @@ struct thread *current;
 static struct thread *idle;
 static struct thread _current;
 
-/* Runs under the timer's soft IRQ. */
+static struct list_head timer_heads[SCHED_MAX_TOUT_TICKS];
+static uint32_t timer_req_mask, timer_recv_mask;
+static int timer_ticks;
 
-_ctx_soft
-void sched_timer_tick(int ticks)
+uint32_t rol(uint32_t v, int c)
 {
-	if (current == idle)
-		return;
+	if ((c & 0x1f) == 0)
+		return v;
 
-	current->ticks -= ticks;
-	if (current->ticks <= 0)
-		irq_sched_raise(IRQ_SCHED_SCHED);
+	c = 32 - c;
+
+	asm volatile("ror %0, %1, %2"
+		     : "=r" (v)
+		     : "r" (v), "r" (c));
+	return v;
+}
+
+/* Runs as a function under the timer's soft IRQ. */
+_ctx_soft
+void sched_timer_tick_soft(int ticks)
+{
+	uint32_t mask;
+
+	/* If the current thread is not the idle thread,
+	 * charge the ticks.
+	 */
+	if (current != idle) {
+		current->ticks -= ticks;
+		if (current->ticks <= 0)
+			irq_sched_raise(IRQ_SCHED_SCHEDULE);
+	}
+
+	if (ticks >= SCHED_MAX_TOUT_TICKS) {
+		/* Too much of a delay; all timers affected. */
+		mask = -1;
+	} else {
+		mask = (1 << ticks) - 1;
+		mask = rol(mask, timer_ticks + 1);
+	}
+
+	mask &= timer_req_mask;
+
+	if (mask) {
+		/* Accumulate the timers which need to be fired. */
+		timer_recv_mask |= mask;
+		irq_sched_raise(IRQ_SCHED_TIMER);
+	}
+
+	timer_ticks += ticks;
+	timer_ticks &= SCHED_MAX_TOUT_TICKS_MASK;
 }
 
 _ctx_sched
@@ -159,7 +198,7 @@ static int schedule_preempt_disabled()
 	return SCHED_RET_SWITCH;
 }
 
-/* Preemption must be enabled when schedule is called. */
+_ctx_proc
 int schedule()
 {
 	int ret;
@@ -171,6 +210,7 @@ int schedule()
 	return ret;
 }
 
+_ctx_sched
 static void wake_up_preempt_disabled(struct list_head *wq)
 {
 	int queue_sched_irq;
@@ -203,9 +243,10 @@ static void wake_up_preempt_disabled(struct list_head *wq)
 	}
 
 	if (current == idle && queue_sched_irq)
-		irq_sched_raise(IRQ_SCHED_SCHED);
+		irq_sched_raise(IRQ_SCHED_SCHEDULE);
 }
 
+_ctx_proc
 void wake_up(struct list_head *wq)
 {
 	preempt_disable();
@@ -214,12 +255,13 @@ void wake_up(struct list_head *wq)
 }
 
 _ctx_sched
-static int sched_irq(void *data)
+static int sched_irq_schedule(void *data)
 {
-	data = data;
+	(void)data;
 	return schedule_preempt_disabled();
 }
 
+_ctx_proc
 struct thread *sched_thread_create(thread_fn fn, void *data)
 {
 	struct thread *t;
@@ -246,9 +288,10 @@ struct thread *sched_thread_create(thread_fn fn, void *data)
 	return t;
 }
 
+_ctx_proc
 static int sched_idle(void *data)
 {
-	data = data;
+	(void)data;
 
 	while (1)
 		wfi();
@@ -256,11 +299,13 @@ static int sched_idle(void *data)
 	return 0;
 }
 
+_ctx_proc
 void mutex_init(struct mutex *m)
 {
 	init_list_head(&m->wq);
 }
 
+_ctx_proc
 void mutex_lock(struct mutex *m)
 {
 	preempt_disable();
@@ -277,6 +322,7 @@ void mutex_lock(struct mutex *m)
 	/* preempt_enable() provides release semantics. */
 }
 
+_ctx_proc
 void mutex_unlock(struct mutex *m)
 {
 	preempt_disable();
@@ -285,6 +331,103 @@ void mutex_unlock(struct mutex *m)
 	preempt_enable();
 }
 
+/* Timers fire at _ctx_sched level, before any threads
+ * get to run. That ensures that the queue is not modified between the time
+ * the IRQ_SCHED_TIMER is raised and the time the function runs.
+ */
+_ctx_soft
+_ctx_sched
+static int sched_irq_sched_timer(void *data)
+{
+	int i;
+	uint32_t mask;
+	struct list_head *e, *h;
+	struct timer *t;
+
+	(void)data;
+
+	irq_soft_disable();
+	mask = timer_recv_mask;
+	/* Reset the recv mask. */
+	timer_recv_mask = 0;
+	/* Turn off the bits for the timers which are about to be fired. */
+	timer_req_mask &= ~mask;
+	irq_soft_enable();
+
+
+	if (mask == 0)
+		return 0;
+
+	/* The timer routines run at _ctx_sched. */
+
+	/* TODO Utilize FFS. */
+	for (i = 0; i < 32; ++i) {
+		if ((mask & (1 << i)) == 0)
+			continue;
+		h = &timer_heads[i];
+		assert(!list_empty(h));
+		while (!list_empty(h)) {
+			e = h->next;
+			list_del(e);
+			t = list_entry(e, struct timer, entry);
+			t->fn(t->data);
+		}
+	}
+	return 0;
+}
+
+_ctx_sched
+static int sched_timer_wakeup(void *data)
+{
+	struct timer *t;
+	t = data;
+	t->cond = 1;
+	wake_up_preempt_disabled(&t->wq);
+	return 0;
+}
+
+_ctx_proc
+void msleep(int ms)
+{
+	int ticks, ft;
+	struct timer t;
+
+	assert(ms > 0);
+
+	ticks = (HZ * ms) / 1000;
+	if (ticks == 0)
+		ticks = 1;
+
+	/* Overflow. */
+	assert(ticks > 0);
+
+	/* Max supported wait time is 32 ticks. */
+	assert(ticks <= SCHED_MAX_TOUT_TICKS);
+
+	init_list_head(&t.wq);
+	t.cond = 0;
+	t.fn = sched_timer_wakeup;
+	t.data = &t;
+
+	/* Although the timer routines run at _ctx_sched, the queueing
+	 * needs to be done at soft IRQ level since the list is
+	 * indirectly controlled by the scheduler's timer soft IRQ
+	 * routine.
+	 */
+	irq_soft_disable();
+	ft = timer_ticks + ticks;
+	ft &= SCHED_MAX_TOUT_TICKS_MASK;
+	list_add_tail(&t.entry, &timer_heads[ft]);
+	timer_req_mask |= 1 << ft;
+	irq_soft_enable();
+
+	/* The wakeup could arrive in between the queuing of the timer,
+	 * and going for a wait. wait_event() handles the situation.
+	 */
+	wait_event(&t.wq, t.cond == 1);
+}
+
+_ctx_init
 void sched_current_init()
 {
 	extern char stack_hi;
@@ -300,10 +443,17 @@ void sched_current_init()
 	current = t;
 }
 
+_ctx_init
 void sched_init()
 {
+	int i;
+
 	init_list_head(&ready);
-	irq_sched_insert(IRQ_SCHED_SCHED, sched_irq, NULL);
+	for (i = 0; i < SCHED_MAX_TOUT_TICKS; ++i)
+		init_list_head(&timer_heads[i]);
+
+	irq_sched_insert(IRQ_SCHED_SCHEDULE, sched_irq_schedule, NULL);
+	irq_sched_insert(IRQ_SCHED_TIMER, sched_irq_sched_timer, NULL);
 
 	idle = sched_thread_create(sched_idle, NULL);
 }

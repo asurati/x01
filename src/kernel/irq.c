@@ -62,10 +62,14 @@ int irq_sched()
 		for (i = 0; i < IRQ_SCHED_MAX && mask; ++i, mask >>= 1)
 			if ((mask & 1) && irqs_sched[i].fn) {
 				ret = irqs_sched[i].fn(irqs_sched[i].data);
-				if (i != IRQ_SCHED_SCHED)
+				if (i != IRQ_SCHED_SCHEDULE)
 					continue;
 				if (ret != SCHED_RET_SWITCH)
 					continue;
+				/* We are waking up from a schedule() which was
+				 * triggered possibly due to quota consumption.
+				 * Return immediately.
+				 */
 				ctx_change = 1;
 				break;
 			}

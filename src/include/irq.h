@@ -29,14 +29,16 @@ enum irq_hard {
 
 enum irq_soft {
 	IRQ_SOFT_TIMER,
-	IRQ_SOFT_MBOX,
 	IRQ_SOFT_MAX
 };
 
+/* If a driver raises sched_timer, it may need to drop
+ * any other sched_ irqs.
+ */
 enum irq_sched {
 	IRQ_SCHED_TIMER,
 	IRQ_SCHED_MBOX,
-	IRQ_SCHED_SCHED,
+	IRQ_SCHED_SCHEDULE,		/* Should be the last. */
 	IRQ_SCHED_MAX
 };
 

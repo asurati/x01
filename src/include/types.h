@@ -72,4 +72,5 @@ struct list_head {
 #define _ctx_soft
 #define _ctx_sched
 #define _ctx_proc
+#define _ctx_init
 #endif
