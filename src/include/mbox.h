@@ -20,32 +20,6 @@
 
 #include <ioreq.h>
 
-enum mbox_property {
-	MBOX_PROP_MAC,
-	MBOX_PROP_MAX
-};
-
-struct mbox_tag {
-	uint32_t id;
-	uint32_t sz;
-	uint32_t type;
-};
-
-struct mbox_tag_clk_rate {
-	struct mbox_tag hdr;
-	uint32_t id;
-	uint32_t rate;
-};
-
-struct mbox_prop_buf {
-	uint32_t sz;
-	uint32_t code;
-	union {
-		struct mbox_tag_clk_rate clk_rate;
-	} u;
-	uint32_t end;
-};
-
 struct mbox_fb_buf {
 	uint32_t phy_width;
 	uint32_t phy_height;
@@ -59,11 +33,13 @@ struct mbox_fb_buf {
 	uint32_t sz;
 };
 
-#define MBOX_IOCTL_FB_ALLOC			1
-#define MBOX_IOCTL_UART_CLOCK			2
+enum mbox_clock {
+	MBOX_CLK_EMMC = 1,
+	MBOX_CLK_UART,
+	MBOX_CLK_MAX,
+};
 
 int		mbox_io(struct io_req *r);
-int		mbox_fb_alloc(int width, int height, int depth,
-			      uintptr_t *addr, size_t *sz, int *pitch);
-uint32_t	mbox_uart_clk();
+int		mbox_fb_alloc(const struct mbox_fb_buf *b);
+uint32_t	mbox_clk_rate_get(enum mbox_clock c);
 #endif

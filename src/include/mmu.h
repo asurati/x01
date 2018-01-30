@@ -35,7 +35,7 @@
 
 #ifdef QRPI2
 
-static inline void mmu_dcache_clean_inv(void *va, size_t sz)
+static inline void mmu_dcache_clean_inv(const void *va, size_t sz)
 {
 	uintptr_t i, s, e;
 
@@ -64,7 +64,7 @@ static inline void mmu_dcache_clean_inv(void *va, size_t sz)
 	dsb();
 }
 
-static inline void mmu_dcache_clean(void *va, size_t sz)
+static inline void mmu_dcache_clean(const void *va, size_t sz)
 {
 	uintptr_t i, s, e;
 
@@ -81,7 +81,7 @@ static inline void mmu_dcache_clean(void *va, size_t sz)
 
 #else /* QRPI2 */
 
-static inline void mmu_dcache_clean_inv(void *va, size_t sz)
+static inline void mmu_dcache_clean_inv(const void *va, size_t sz)
 {
 	uintptr_t s, e;
 
@@ -95,7 +95,7 @@ static inline void mmu_dcache_clean_inv(void *va, size_t sz)
 	dsb();
 }
 
-static inline void mmu_dcache_clean(void *va, size_t sz)
+static inline void mmu_dcache_clean(const void *va, size_t sz)
 {
 	uintptr_t s, e;
 

@@ -18,14 +18,9 @@
 #ifndef _FB_H_
 #define _FB_H_
 
-struct fb_info {
-	int width;
-	int height;
-	int depth;
-	int pitch;
-	void *addr;
-	size_t sz;
-};
+#include <mbox.h>
 
-int	fb_info_get(struct fb_info *);
+extern void *fb;
+extern const struct mbox_fb_buf *fbi;
+
 #endif

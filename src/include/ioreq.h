@@ -59,7 +59,7 @@ struct io_req {
 	int flags;
 	int ret;
 	void *drv_data;	/* For driver's use. */
-	void *req;
+	const void *req;
 	size_t sz;
 	union {
 		struct io_req_ioctl ioctl;

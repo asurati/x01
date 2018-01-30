@@ -27,6 +27,7 @@
 #include <lock.h>
 
 #define MBOX_BASE		0xb880
+
 #define MBOX_ARM_RO		(MBOX_BASE)
 #define MBOX_ARM_WO		(MBOX_BASE + 0x20)
 
@@ -41,17 +42,35 @@
 #define MBOX_CH_FB		1
 #define MBOX_CH_PROP		8
 
-#define MBOX_TAG_MAC		0x10003
-#define MBOX_TAG_END		0
-
-#define MBOX_TAG_TYPE_POS	31
-#define MBOX_TAG_TYPE_SZ	1
+#define MBOX_IOCTL_FB_ALLOC	1
+#define MBOX_IOCTL_UART_CLOCK	2
 
 static int io_pending;
 static struct io_req *req_pending;
 
 static struct lock ioq_lock;
 static struct list_head ioq;
+
+struct mbox_tag {
+	uint32_t id;
+	uint32_t sz;
+	uint32_t type;
+};
+
+struct mbox_tag_clk_rate {
+	struct mbox_tag hdr;
+	uint32_t id;
+	uint32_t rate;
+};
+
+struct mbox_prop_buf {
+	uint32_t sz;
+	uint32_t code;
+	union {
+		struct mbox_tag_clk_rate clk_rate;
+	} u;
+	uint32_t end;
+};
 
 struct mbox {
 	uint32_t rw;
@@ -64,6 +83,8 @@ struct mbox {
 
 static struct mbox *wo;
 static struct mbox *ro;
+
+static void mbox_io_process();
 
 _ctx_hard
 static int mbox_irq(void *data)
@@ -78,7 +99,6 @@ static int mbox_irq(void *data)
 	return 0;
 }
 
-static void mbox_io_process();
 _ctx_sched
 static int mbox_irq_sched(void *data)
 {
@@ -136,7 +156,7 @@ static void mbox_io_process(struct list_head *e)
 	writel(pa, &wo->rw);
 }
 
-/* Process context only. */
+_ctx_proc
 int mbox_io(struct io_req *r)
 {
 	uintptr_t pa;
@@ -161,6 +181,59 @@ int mbox_io(struct io_req *r)
 	lock_sched_unlock(&ioq_lock);
 
 	return IO_RET_PENDING;
+}
+
+_ctx_proc
+uint32_t mbox_clk_rate_get(enum mbox_clock c)
+{
+	int ret;
+	uint32_t rate;
+	struct list_head wq;
+	struct io_req ior;
+	struct mbox_prop_buf *b;
+
+	assert(c > 0 && c < MBOX_CLK_MAX);
+
+	b = kmalloc(sizeof(*b));
+	memset(b, 0, sizeof(*b));
+	b->sz = sizeof(*b);
+	b->u.clk_rate.hdr.id = 0x30002;
+	b->u.clk_rate.hdr.sz = 8;
+	b->u.clk_rate.id = c;
+
+	init_list_head(&wq);
+	memset(&ior, 0, sizeof(ior));
+	ior.wq = &wq;
+	ior.req = b;
+	ior.sz = b->sz;
+	IOCTL(&ior, MBOX_IOCTL_UART_CLOCK, IOCTL_DIR_READ);
+	ret = mbox_io(&ior);
+	assert(ret == IO_RET_PENDING);
+	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
+
+	rate = b->u.clk_rate.rate;
+	kfree(b);
+	return rate;
+}
+
+/* The caller must ensure 16-byte alignment. */
+_ctx_proc
+int mbox_fb_alloc(const struct mbox_fb_buf *b)
+{
+	int ret;
+	struct io_req ior;
+	struct list_head wq;
+
+	init_list_head(&wq);
+	memset(&ior, 0, sizeof(ior));
+	ior.wq = &wq;
+	ior.req = b;
+	ior.sz = sizeof(*b);
+	IOCTL(&ior, MBOX_IOCTL_FB_ALLOC, IOCTL_DIR_NONE);
+	ret = mbox_io(&ior);
+	assert(ret == IO_RET_PENDING);
+	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
+	return 0;
 }
 
 void mbox_init()

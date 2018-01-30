@@ -39,22 +39,20 @@ void timer_start();
 void mbox_init();
 void fb_init();
 void uart_init();
+void sdhost_init();
 
 #ifdef QRPI2
 
 static int display_thread(void *p)
 {
 	void *q;
-	struct fb_info fbi;
 	const int sz = 64;
 	int i, row, colsz;
 	uint8_t *line[2];
 
 	(void)p;
 
-	fb_info_get(&fbi);
-
-	colsz = (fbi.depth >> 3) * sz;
+	colsz = (fbi->depth >> 3) * sz;
 	line[0] = kmalloc(colsz);
 	line[1] = kmalloc(colsz);
 
@@ -64,29 +62,29 @@ static int display_thread(void *p)
 	memset(line[1], 0, colsz);
 
 
-	for (i = 0; i < colsz; i += (fbi.depth >> 3)) {
+	for (i = 0; i < colsz; i += (fbi->depth >> 3)) {
 		line[0][i] = 0xff;		/* Red */
 		line[1][i + 2] = 0xff;		/* Blue */
 	}
 
 	i = 0;
 	while (1) {
-		p = fbi.addr;
-		q = p + fbi.pitch - colsz;
+		p = fb;
+		q = p + fbi->pitch - colsz;
 		for (row = 0; row < sz; ++row) {
 			memcpy(p, line[i], colsz);
 			memcpy(q, line[i], colsz);
-			p += fbi.pitch;
-			q += fbi.pitch;
+			p += fbi->pitch;
+			q += fbi->pitch;
 		}
 
-		p = fbi.addr + (fbi.height - sz) * fbi.pitch;
-		q = p + fbi.pitch - colsz;
+		p = fb + (fbi->phy_height - sz) * fbi->pitch;
+		q = p + fbi->pitch - colsz;
 		for (row = 0; row < sz; ++row) {
 			memcpy(p, line[i], colsz);
 			memcpy(q, line[i], colsz);
-			p += fbi.pitch;
-			q += fbi.pitch;
+			p += fbi->pitch;
+			q += fbi->pitch;
 		}
 
 		/* Since the only interrupt active is the timer interrupt, which
@@ -143,6 +141,7 @@ void kmain()
 	irq_enable();
 
 	timer_start();
+	sdhost_init();
 
 	/* The following init() calls require IRQs to be enabled,
 	 * since they involve IO to the MBOX.
@@ -155,11 +154,10 @@ void kmain()
 	uart_init();
 
 #ifdef QRPI2
+	(void)display_thread;
 	sched_thread_create(display_thread, NULL);
-	sched_thread_create(ticker_thread, NULL);
-#else
-	sched_thread_create(ticker_thread, NULL);
 #endif
+	sched_thread_create(ticker_thread, NULL);
 
 	init_list_head(&wq);
 

@@ -27,58 +27,37 @@
 #include <sched.h>
 #include <slub.h>
 
-static struct mbox_fb_buf *fbi;
-static void *fb;
-
-int fb_info_get(struct fb_info *fi)
-{
-	fi->width = fbi->phy_width;
-	fi->height = fbi->phy_height;
-	fi->depth = fbi->depth;
-	fi->pitch = fbi->pitch;
-	fi->addr = fb;
-	fi->sz = fbi->sz;
-	return 0;
-}
+static struct mbox_fb_buf b __attribute__ ((aligned(16)));
+void *fb;
+const struct mbox_fb_buf *fbi = &b;
 
 void fb_init()
 {
 	int ret;
-	struct list_head wq;
-	struct io_req ior;
 	struct mmu_map_req r;
 	size_t sz;
 
-	ret = vm_alloc(VMA_SLUB, VM_UNIT_4MB, 1, &fb);
+	memset(&b, 0, sizeof(b));
+
+	b.phy_width = b.virt_width = 1024;
+	b.phy_height = b.virt_height = 768;
+	b.depth = 24;
+
+	ret = mbox_fb_alloc(&b);
 	assert(ret == 0);
 
-	fbi = kmalloc(sizeof(*fbi));
-	assert(fbi);
-	memset(fbi, 0, sizeof(*fbi));
-
-	fbi->phy_width = fbi->virt_width = 1024;
-	fbi->phy_height = fbi->virt_height = 768;
-	fbi->depth = 24;
-
-	init_list_head(&wq);
-	memset(&ior, 0, sizeof(ior));
-	ior.wq = &wq;
-	ior.req = fbi;
-	ior.sz = sizeof(*fbi);
-	IOCTL(&ior, MBOX_IOCTL_FB_ALLOC, IOCTL_DIR_NONE);
-	ret = mbox_io(&ior);
-	assert(ret == IO_RET_PENDING);
-	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
-
 	/* Keep the size SECTION-aligned for ease in mapping. */
-	sz = ALIGN_UP(fbi->sz, 1024 * 1024);
+	sz = ALIGN_UP(b.sz, SECTION_SIZE);
 	sz >>= SECTION_SIZE_SZ;
 
 	/* Restrict the size to max 4MB. */
 	assert(sz < 4);
 
+	ret = vm_alloc(VMA_SLUB, VM_UNIT_4MB, 1, &fb);
+	assert(ret == 0);
+
 	r.va_start = fb;
-	r.pa_start = fbi->addr;
+	r.pa_start = b.addr;
 	r.n = sz;
 	r.mt = MT_NRM_IO_NC;		/* Write Combining on armv6. */
 	r.ap = AP_SRW;
@@ -91,5 +70,5 @@ void fb_init()
 	ret = mmu_map(&r);
 	assert(ret == 0);
 
-	memset(fb, 0, fbi->sz);
+	memset(fb, 0, b.sz);
 }
