@@ -71,5 +71,5 @@ struct list_head {
 #define _ctx_hard
 #define _ctx_soft
 #define _ctx_sched
-#define _ctx_process
+#define _ctx_proc
 #endif
