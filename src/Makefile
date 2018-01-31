@@ -62,7 +62,7 @@ OBJS += dev/timer.o
 OBJS += dev/intc.o
 OBJS += dev/mbox.o
 OBJS += dev/uart.o
-OBJS += dev/sdhost.o
+OBJS += dev/sdhc.o
 ifeq ($(BOARD),QRPI2)
 OBJS += dev/timer_qrpi2.o
 else
@@ -73,7 +73,7 @@ endif
 
 QFLAGS := -m 256 -M raspi2 -kernel $(BIN) -serial stdio \
 	  -d int,guest_errors,unimp \
-	  -drive file=/home/u0/fs.img,if=sd,format=raw \
+	  -drive file=img.qcow2,if=sd,format=qcow2 \
 	  -monitor tcp::4444,server,nowait
 
 LDFLAGS := -n -T pi.ld -defsym LOAD_PA=$(LOAD_PA)

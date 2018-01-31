@@ -39,7 +39,7 @@ void timer_start();
 void mbox_init();
 void fb_init();
 void uart_init();
-void sdhost_init();
+void sdhc_init();
 
 #ifdef QRPI2
 
@@ -141,7 +141,8 @@ void kmain()
 	irq_enable();
 
 	timer_start();
-	sdhost_init();
+
+	sdhc_init();
 
 	/* The following init() calls require IRQs to be enabled,
 	 * since they involve IO to the MBOX.
@@ -149,9 +150,8 @@ void kmain()
 
 #ifdef QRPI2
 	fb_init();
-#endif
-
 	uart_init();
+#endif
 
 #ifdef QRPI2
 	(void)display_thread;
