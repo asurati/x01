@@ -3,4 +3,5 @@
 *.bin
 *.img
 *.gz
+*.qcow2
 
