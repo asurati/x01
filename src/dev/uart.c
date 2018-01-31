@@ -49,13 +49,6 @@ void uart_init()
 {
 	uint32_t clk, ibrd, fbrd, dvdr, v;
 
-#ifdef RPI
-	/* Since we boot using U-Boot, the UART
-	 * is already initialized.
-	 */
-	return;
-#endif
-
 	clk = mbox_clk_rate_get(MBOX_CLK_UART);
 
 	dvdr = 115200 << 4;
