@@ -23,6 +23,7 @@
 #include <mutex.h>
 
 #include <sys/sched.h>
+#include <sys/timer.h>
 
 static struct list_head ready;
 struct thread *current;
