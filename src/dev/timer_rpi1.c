@@ -18,7 +18,6 @@
 #include <assert.h>
 #include <io.h>
 #include <irq.h>
-#include <timer.h>
 
 #define TMR_BASE		0x3000
 
