@@ -23,12 +23,15 @@
 
 enum irq_hard {
 	IRQ_HARD_TIMER,
+	IRQ_HARD_SDHC,
 	IRQ_HARD_MBOX,
 	IRQ_HARD_MAX
 };
 
 enum irq_soft {
 	IRQ_SOFT_TIMER,
+	IRQ_SOFT_SDHC,
+	IRQ_SOFT_MBOX,
 	IRQ_SOFT_MAX
 };
 
@@ -37,6 +40,7 @@ enum irq_soft {
  */
 enum irq_sched {
 	IRQ_SCHED_TIMER,
+	IRQ_SCHED_SDHC,
 	IRQ_SCHED_MBOX,
 	IRQ_SCHED_SCHEDULE,		/* Should be the last. */
 	IRQ_SCHED_MAX
@@ -82,6 +86,7 @@ static inline void wfi()
 #define IRQH_RET_NONE		0
 #define IRQH_RET_HANDLED	(1 << 0)
 #define IRQH_RET_SOFT		(1 << 1)
+#define IRQH_RET_SCHED		(1 << 2)
 
 typedef int (*irq_fn)(void *data);
 
