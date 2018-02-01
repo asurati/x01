@@ -89,14 +89,17 @@ static void mbox_io_process();
 _ctx_hard
 static int mbox_irq(void *data)
 {
+	int ret;
 	(void)data;
 
+	ret = IRQH_RET_NONE;
 	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
 		/* Silence the interrupt by reading the RW field. */
 		readl(&ro->rw);
 		irq_sched_raise(IRQ_SCHED_MBOX);
+		ret = IRQH_RET_HANDLED | IRQH_RET_SCHED;
 	}
-	return 0;
+	return ret;
 }
 
 _ctx_sched
