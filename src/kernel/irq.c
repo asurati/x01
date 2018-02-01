@@ -108,7 +108,8 @@ int irq_hard()
 	int i, ret;
 	ret = 0;
 	for (i = 0; i < IRQ_HARD_MAX; ++i)
-		ret |= irqs_hard[i].fn(irqs_hard[i].data);
+		if (irqs_hard[i].fn)
+			ret |= irqs_hard[i].fn(irqs_hard[i].data);
 	return ret;
 }
 
