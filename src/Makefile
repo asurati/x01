@@ -42,6 +42,7 @@ OBJS += boot/boot.o
 
 OBJS += lib/string.o
 OBJS += lib/assert.o
+OBJS += lib/div.o
 
 OBJS += kernel/excpt.o
 OBJS += kernel/sched.o
