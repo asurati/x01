@@ -57,6 +57,8 @@ OBJS += kernel/excptc.o
 OBJS += kernel/irq.o
 OBJS += kernel/schedc.o
 OBJS += kernel/fb.o
+OBJS += kernel/ioreq.o
+OBJS += kernel/work.o
 OBJS += kernel/main.o
 
 OBJS += dev/timer.o
@@ -64,6 +66,7 @@ OBJS += dev/intc.o
 OBJS += dev/mbox.o
 OBJS += dev/uart.o
 OBJS += dev/sdhc.o
+OBJS += dev/sd.o
 ifeq ($(BOARD),QRPI2)
 OBJS += dev/timer_qrpi2.o
 else
