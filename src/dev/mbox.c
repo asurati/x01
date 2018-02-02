@@ -49,7 +49,10 @@ static int mbox_irq(void *p)
 _ctx_sched
 static int mbox_irq_sched(void *p)
 {
-	ioq_sched_io_done(p);
+	struct io_req *ior;
+
+	ior = ioq_ior_dequeue_sched(p);
+	ioq_ior_done_sched(p, ior);
 	return 0;
 }
 
@@ -117,8 +120,8 @@ uint32_t mbox_clk_rate_get(enum mbox_clock c)
 	ior.io.ioctl.cmd = MBOX_IOCTL_UART_CLOCK;
 	ior.io.ioctl.arg = b;
 
-	ioq_io_submit(&mbox_ioq, &ior);
-	ioq_io_wait(&ior);
+	ioq_ior_submit(&mbox_ioq, &ior);
+	ioq_ior_wait(&ior);
 
 	rate = b->u.clk_rate.rate;
 	kfree(b);
@@ -137,8 +140,8 @@ int mbox_fb_alloc(const struct mbox_fb_buf *b)
 	ior.io.ioctl.cmd = MBOX_IOCTL_FB_ALLOC;
 	ior.io.ioctl.arg = (void *)b;
 
-	ioq_io_submit(&mbox_ioq, &ior);
-	ioq_io_wait(&ior);
+	ioq_ior_submit(&mbox_ioq, &ior);
+	ioq_ior_wait(&ior);
 	return 0;
 }
 
