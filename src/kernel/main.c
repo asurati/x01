@@ -34,12 +34,14 @@ void vm_init();
 void excpt_init();
 void intc_init();
 void irq_init();
+void ioreq_init();
 void timer_init();
 void timer_start();
 void mbox_init();
 void fb_init();
 void uart_init();
 void sdhc_init();
+void sd_init();
 
 #ifdef QRPI2
 
@@ -134,6 +136,7 @@ void kmain()
 	intc_init();
 	irq_init();
 	sched_init();
+	ioreq_init();
 	timer_init();
 	mbox_init();
 
@@ -141,8 +144,6 @@ void kmain()
 	irq_enable();
 
 	timer_start();
-
-	sdhc_init();
 
 	/* The following init() calls require IRQs to be enabled,
 	 * since they involve IO to the MBOX.
@@ -158,6 +159,9 @@ void kmain()
 	sched_thread_create(display_thread, NULL);
 #endif
 	sched_thread_create(ticker_thread, NULL);
+
+	sdhc_init();
+	sd_init();
 
 	init_list_head(&wq);
 
