@@ -18,8 +18,6 @@
 #ifndef _MBOX_H_
 #define _MBOX_H_
 
-#include <ioreq.h>
-
 struct mbox_fb_buf {
 	uint32_t phy_width;
 	uint32_t phy_height;
@@ -39,7 +37,6 @@ enum mbox_clock {
 	MBOX_CLK_MAX,
 };
 
-int		mbox_io(struct io_req *r);
 int		mbox_fb_alloc(const struct mbox_fb_buf *b);
 uint32_t	mbox_clk_rate_get(enum mbox_clock c);
 #endif

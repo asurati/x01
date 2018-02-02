@@ -17,80 +17,24 @@
 
 #include <assert.h>
 #include <io.h>
-#include <irq.h>
-#include <list.h>
 #include <mbox.h>
 #include <mmu.h>
-#include <sched.h>
 #include <slub.h>
 #include <string.h>
-#include <lock.h>
+#include <ioreq.h>
 
-#define MBOX_BASE		0xb880
-
-#define MBOX_ARM_RO		(MBOX_BASE)
-#define MBOX_ARM_WO		(MBOX_BASE + 0x20)
-
-#define MBOX_RO_IRQ_EN_POS	0
-#define MBOX_RO_IRQ_PEND_POS	4
-#define MBOX_RO_IRQ_EN_SZ	1
-#define MBOX_RO_IRQ_PEND_SZ	1
-
-#define MBOX_BUF_TYPE_POS	31
-#define MBOX_BUF_TYPE_SZ	1
-
-#define MBOX_CH_FB		1
-#define MBOX_CH_PROP		8
-
-#define MBOX_IOCTL_FB_ALLOC	1
-#define MBOX_IOCTL_UART_CLOCK	2
-
-static int io_pending;
-static struct io_req *req_pending;
-
-static struct lock ioq_lock;
-static struct list_head ioq;
-
-struct mbox_tag {
-	uint32_t id;
-	uint32_t sz;
-	uint32_t type;
-};
-
-struct mbox_tag_clk_rate {
-	struct mbox_tag hdr;
-	uint32_t id;
-	uint32_t rate;
-};
-
-struct mbox_prop_buf {
-	uint32_t sz;
-	uint32_t code;
-	union {
-		struct mbox_tag_clk_rate clk_rate;
-	} u;
-	uint32_t end;
-};
-
-struct mbox {
-	uint32_t rw;
-	uint32_t r[3];
-	uint32_t peek;
-	uint32_t sender;
-	uint32_t status;
-	uint32_t config;
-};
+#include <sys/ioreq.h>
+#include <sys/mbox.h>
 
 static struct mbox *wo;
 static struct mbox *ro;
-
-static void mbox_io_process();
+static struct io_req_queue mbox_ioq;
 
 _ctx_hard
-static int mbox_irq(void *data)
+static int mbox_irq(void *p)
 {
 	int ret;
-	(void)data;
+	(void)p;
 
 	ret = IRQH_RET_NONE;
 	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
@@ -103,52 +47,42 @@ static int mbox_irq(void *data)
 }
 
 _ctx_sched
-static int mbox_irq_sched(void *data)
+static int mbox_irq_sched(void *p)
 {
-	(void)data;
-	/* The setting of the DONE bit will be visible to the sleeping
-	 * process latest at the preempt_enable() release performed
-	 * by wake_up().
-	 */
-	BF_SET(req_pending->flags, IORF_DONE, 1);
-	wake_up(req_pending->wq);
-
-	/* Cannot touch the request once the wake up
-	 * has been signalled.
-	 */
-	req_pending = NULL;
-	if (io_pending) {
-		--io_pending;
-		mbox_io_process(list_del_head(&ioq));
-	}
+	ioq_sched_io_done(p);
 	return 0;
 }
 
-_ctx_sched
-static void mbox_io_process(struct list_head *e)
+_ctx_proc
+static void mbox_ioctl(struct io_req *ior)
 {
-	int ch, code;
 	uintptr_t pa;
+	int ch;
+	size_t sz;
 
-	assert(req_pending == NULL);
-	req_pending = list_entry(e, struct io_req, entry);
+	sz = 0;
+	ch = 0;
 
-	/* Error error checking. */
-
-	code = BF_GET(req_pending->u.ioctl.code, IOCTL_CODE);
-	switch (code) {
+	switch (ior->io.ioctl.cmd) {
 	case MBOX_IOCTL_FB_ALLOC:
+		sz = sizeof(struct mbox_fb_buf);
 		ch = MBOX_CH_FB;
 		break;
-	default:
+	case MBOX_IOCTL_UART_CLOCK:
+		sz = sizeof(struct mbox_prop_buf);
 		ch = MBOX_CH_PROP;
+		break;
+	default:
+		assert(0);
 		break;
 	}
 
-	mmu_dcache_clean_inv(req_pending->req, req_pending->sz);
-
-	pa = (uintptr_t)req_pending->drv_data;
+	/* va_to_pa must be called in the process context. */
+	pa = mmu_va_to_pa(ior->io.ioctl.arg);
+	assert(ALIGNED(pa, 16));
 	pa |= ch;
+
+	mmu_dcache_clean_inv(ior->io.ioctl.arg, sz);
 
 	barrier();
 
@@ -160,38 +94,9 @@ static void mbox_io_process(struct list_head *e)
 }
 
 _ctx_proc
-int mbox_io(struct io_req *r)
-{
-	uintptr_t pa;
-
-	BF_SET(r->flags, IORF_DONE, 0);
-	r->ret = 0;
-
-	assert(BF_GET(r->flags, IORF_TYPE) == IORF_TYPE_IOCTL);
-
-	/* va_to_pa must be called in the process context. */
-	pa = mmu_va_to_pa(r->req);
-	assert(ALIGNED(pa, 16));
-	r->drv_data = (void *)pa;
-
-	lock_sched_lock(&ioq_lock);
-	if (io_pending == 0) {
-		mbox_io_process(&r->entry);
-	} else {
-		list_add_tail(&r->entry, &ioq);
-		++io_pending;
-	}
-	lock_sched_unlock(&ioq_lock);
-
-	return IO_RET_PENDING;
-}
-
-_ctx_proc
 uint32_t mbox_clk_rate_get(enum mbox_clock c)
 {
-	int ret;
 	uint32_t rate;
-	struct list_head wq;
 	struct io_req ior;
 	struct mbox_prop_buf *b;
 
@@ -204,15 +109,13 @@ uint32_t mbox_clk_rate_get(enum mbox_clock c)
 	b->u.clk_rate.hdr.sz = 8;
 	b->u.clk_rate.id = c;
 
-	init_list_head(&wq);
 	memset(&ior, 0, sizeof(ior));
-	ior.wq = &wq;
-	ior.req = b;
-	ior.sz = b->sz;
-	IOCTL(&ior, MBOX_IOCTL_UART_CLOCK, IOCTL_DIR_READ);
-	ret = mbox_io(&ior);
-	assert(ret == IO_RET_PENDING);
-	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
+	ior.type = IOR_TYPE_IOCTL;
+	ior.io.ioctl.cmd = MBOX_IOCTL_UART_CLOCK;
+	ior.io.ioctl.arg = b;
+
+	ioq_io_submit(&mbox_ioq, &ior);
+	ioq_io_wait(&ior);
 
 	rate = b->u.clk_rate.rate;
 	kfree(b);
@@ -223,28 +126,25 @@ uint32_t mbox_clk_rate_get(enum mbox_clock c)
 _ctx_proc
 int mbox_fb_alloc(const struct mbox_fb_buf *b)
 {
-	int ret;
 	struct io_req ior;
-	struct list_head wq;
 
-	init_list_head(&wq);
 	memset(&ior, 0, sizeof(ior));
-	ior.wq = &wq;
-	ior.req = b;
-	ior.sz = sizeof(*b);
-	IOCTL(&ior, MBOX_IOCTL_FB_ALLOC, IOCTL_DIR_NONE);
-	ret = mbox_io(&ior);
-	assert(ret == IO_RET_PENDING);
-	wait_event(&wq, BF_GET(ior.flags, IORF_DONE) == 1);
+
+	ior.type = IOR_TYPE_IOCTL;
+	ior.io.ioctl.cmd = MBOX_IOCTL_FB_ALLOC;
+	ior.io.ioctl.arg = (void *)b;
+
+	ioq_io_submit(&mbox_ioq, &ior);
+	ioq_io_wait(&ior);
 	return 0;
 }
 
+_ctx_init
 void mbox_init()
 {
 	uint32_t v;
 
-	init_list_head(&ioq);
-	io_pending = 0;
+	ioq_init(&mbox_ioq, mbox_ioctl, NULL);
 
 	wo = io_base + MBOX_ARM_WO;
 	ro = io_base + MBOX_ARM_RO;
@@ -252,7 +152,7 @@ void mbox_init()
 	assert(sizeof(struct mbox) == 0x20);
 
 	irq_hard_insert(IRQ_HARD_MBOX, mbox_irq, NULL);
-	irq_sched_insert(IRQ_SCHED_MBOX, mbox_irq_sched, NULL);
+	irq_sched_insert(IRQ_SCHED_MBOX, mbox_irq_sched, &mbox_ioq);
 
 	/* QRPI2 supports raising interrupts when VC responds to
 	 * ARM's requests.
