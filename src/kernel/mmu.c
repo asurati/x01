@@ -19,7 +19,7 @@
 #include <pm.h>
 #include <mmu.h>
 #include <string.h>
-#include <mutex.h>
+#include <lock.h>
 #include <barrier.h>
 #include <slub.h>
 #include <uart.h>
@@ -31,11 +31,10 @@ extern char KMODE_VA;
 extern char k_pd_start;
 extern char k_pt_start;
 
-/* Since a mutex is being used to protect k_pd, the callers of
- * map/unmap/va_to_pa routines must ensure that they are running
- * at process context.
+/* Switch from a mutex to scheduler lock, to allow IO routines
+ * to call into mmu at _ctx_proc and _ctx_sched levels.
  */
-static struct mutex k_pd_lock;
+static struct lock k_pd_lock;
 
 const uintptr_t kmode_va = (uintptr_t)&KMODE_VA;
 
@@ -132,8 +131,6 @@ void mmu_init()
 
 	mmu_dcache_clean(pd, 4 * sizeof(uintptr_t));
 	mmu_tlb_invalidate(NULL, 1024 * PAGE_SIZE);
-
-	mutex_init(&k_pd_lock);
 }
 
 int mmu_map_sections(const struct mmu_map_req *r)
@@ -223,10 +220,10 @@ int mmu_map_pages(const struct mmu_map_req *r)
 		 * the page/large-page.
 		 */
 		if (k == 0) {
-			mutex_unlock(&k_pd_lock);
+			lock_sched_unlock(&k_pd_lock);
 			pt = mmu_slub_alloc();
 			tpa = mmu_va_to_pa(pt);
-			mutex_lock(&k_pd_lock);
+			lock_sched_lock(&k_pd_lock);
 
 			memset(pt, 0, 1024);
 			mmu_dcache_clean(pt, 1024);
@@ -301,7 +298,7 @@ int mmu_map(const struct mmu_map_req *r)
 	assert(r->ap < AP_MAX);
 	assert(r->mu < MAP_UNIT_MAX);
 
-	mutex_lock(&k_pd_lock);
+	lock_sched_lock(&k_pd_lock);
 
 	/* The addresses must be aligned corresponding to the unit
 	 * requested.
@@ -320,7 +317,7 @@ int mmu_map(const struct mmu_map_req *r)
 		ret = mmu_map_sections(r);
 	else
 		ret = mmu_map_pages(r);
-	mutex_unlock(&k_pd_lock);
+	lock_sched_unlock(&k_pd_lock);
 
 	return ret;
 }
@@ -334,7 +331,7 @@ int mmu_unmap(const struct mmu_map_req *r)
 	assert(r && r->n > 0);
 	assert(r->mu < MAP_UNIT_MAX);
 
-	mutex_lock(&k_pd_lock);
+	lock_sched_lock(&k_pd_lock);
 	pd = (uintptr_t *)&k_pd_start;
 
 	/* The addresses must be aligned corresponding to the unit
@@ -399,7 +396,7 @@ int mmu_unmap(const struct mmu_map_req *r)
 			mmu_dcache_clean(pt, n * sizeof(uintptr_t));
 		}
 	}
-	mutex_unlock(&k_pd_lock);
+	lock_sched_unlock(&k_pd_lock);
 	return 0;
 }
 
@@ -409,7 +406,7 @@ uintptr_t mmu_va_to_pa(const void *p)
 	const uintptr_t *pd;
 	uintptr_t va, pa, *pt;
 
-	mutex_lock(&k_pd_lock);
+	lock_sched_lock(&k_pd_lock);
 	pd = (uintptr_t *)&k_pd_start;
 
 	va = (uintptr_t)p;
@@ -453,6 +450,6 @@ uintptr_t mmu_va_to_pa(const void *p)
 		pa += va & (~BF_SMASK(PTE_SP_BASE));
 	}
 exit:
-	mutex_unlock(&k_pd_lock);
+	lock_sched_unlock(&k_pd_lock);
 	return pa;
 }

@@ -53,7 +53,11 @@ static int mbox_irq_sched(void *p)
 	return 0;
 }
 
-_ctx_proc
+/* Although the IO routines can run at _ctx_proc, the IO chaining requires
+ * them to run at _ctx_sched level too. Consider _ctx_sched as the level
+ * at which they run.
+ */
+_ctx_sched
 static void mbox_ioctl(struct io_req *ior)
 {
 	uintptr_t pa;
@@ -77,7 +81,6 @@ static void mbox_ioctl(struct io_req *ior)
 		break;
 	}
 
-	/* va_to_pa must be called in the process context. */
 	pa = mmu_va_to_pa(ior->io.ioctl.arg);
 	assert(ALIGNED(pa, 16));
 	pa |= ch;

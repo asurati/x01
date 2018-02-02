@@ -39,6 +39,50 @@ void ioq_init(struct io_req_queue *ioq, ioq_fn ioctl, ioq_fn rw)
 }
 
 _ctx_sched
+static struct io_req *ioq_io_next(struct io_req_queue *ioq)
+{
+	struct list_head *e;
+
+	e = NULL;
+	if (ioq->busy == 0 && !list_empty(&ioq->in)) {
+		++ioq->busy;
+		/* Do not unlink the request yet. */
+		e = ioq->in.next;
+	}
+	if (e == NULL)
+		return NULL;
+	else
+		return list_entry(e, struct io_req, entry);
+}
+
+/* The routine can run at both levels, but an instance running at _ctx_proc
+ * is safe from interference by that running at _ctx_sched because the
+ * busy flag ensures that at most one instance is running at any time.
+ *
+ * Alternatively, the ioq_sched_io_done should always queue the completion
+ * to the work queue, where the routine will start the next IO. But such
+ * arrangement requires ioreq specific routine in the work, which must
+ * then call the client's routine.
+ *
+ */
+_ctx_proc
+_ctx_sched
+static void ioq_io_run(struct io_req_queue *ioq, struct io_req *ior)
+{
+	if (ior == NULL)
+		return;
+
+	switch (ior->type) {
+	case IOR_TYPE_IOCTL:
+		ioq->ioctl(ior);
+		break;
+	default:
+		assert(0);
+		break;
+	}
+}
+
+_ctx_sched
 void ioq_sched_io_done(struct io_req_queue *ioq)
 {
 	struct io_req *ior;
@@ -52,35 +96,9 @@ void ioq_sched_io_done(struct io_req_queue *ioq)
 		wq_work_add(ioq->ioc_wq, &ior->ioc.ioc_work);
 	else
 		wake_up(&ior->ioc.ioc_wait);
-}
 
-_ctx_proc
-static void ioq_io_next(struct io_req_queue *ioq)
-{
-	struct io_req *ior;
-	struct list_head *e;
-
-	e = NULL;
-	lock_sched_lock(&ioq->in_lock);
-	if (ioq->busy == 0 && !list_empty(&ioq->in)) {
-		++ioq->busy;
-		/* Do not unlink the request yet. */
-		e = ioq->in.next;
-	}
-	lock_sched_unlock(&ioq->in_lock);
-
-	if (e == NULL)
-		return;
-
-	ior = list_entry(e, struct io_req, entry);
-	switch (ior->type) {
-	case IOR_TYPE_IOCTL:
-		ioq->ioctl(ior);
-		break;
-	default:
-		assert(0);
-		break;
-	}
+	ior = ioq_io_next(ioq);
+	ioq_io_run(ioq, ior);
 }
 
 _ctx_proc
@@ -92,8 +110,10 @@ void ioq_io_submit(struct io_req_queue *ioq, struct io_req *ior)
 
 	lock_sched_lock(&ioq->in_lock);
 	list_add_tail(&ior->entry, &ioq->in);
+	ior = ioq_io_next(ioq);
 	lock_sched_unlock(&ioq->in_lock);
-	ioq_io_next(ioq);
+
+	ioq_io_run(ioq, ior);
 }
 
 /* Only for synchronous wait for the completion. */
