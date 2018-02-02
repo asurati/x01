@@ -55,6 +55,6 @@ struct io_req {
 
 struct io_req_queue;
 
-void	ioq_io_submit(struct io_req_queue *ioq, struct io_req *ior);
-void	ioq_io_wait(struct io_req *ior);
+void	ioq_ior_submit(struct io_req_queue *ioq, struct io_req *ior);
+void	ioq_ior_wait(struct io_req *ior);
 #endif

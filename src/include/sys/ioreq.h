@@ -34,6 +34,8 @@ struct io_req_queue {
 	struct work_queue *ioc_wq;
 };
 
-void	ioq_init(struct io_req_queue *ioq, ioq_fn ioctl, ioq_fn rw);
-void	ioq_sched_io_done(struct io_req_queue *ioq);
+void		ioq_init(struct io_req_queue *ioq, ioq_fn ioctl, ioq_fn rw);
+struct io_req	*ioq_ior_dequeue_sched(struct io_req_queue *ioq);
+void		ioq_ior_done_sched(struct io_req_queue *ioq,
+				   struct io_req *ior);
 #endif

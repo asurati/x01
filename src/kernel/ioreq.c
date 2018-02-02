@@ -39,7 +39,7 @@ void ioq_init(struct io_req_queue *ioq, ioq_fn ioctl, ioq_fn rw)
 }
 
 _ctx_sched
-static struct io_req *ioq_io_next(struct io_req_queue *ioq)
+static struct io_req *ioq_ior_next(struct io_req_queue *ioq)
 {
 	struct list_head *e;
 
@@ -67,7 +67,7 @@ static struct io_req *ioq_io_next(struct io_req_queue *ioq)
  */
 _ctx_proc
 _ctx_sched
-static void ioq_io_run(struct io_req_queue *ioq, struct io_req *ior)
+static void ioq_ior_run(struct io_req_queue *ioq, struct io_req *ior)
 {
 	if (ior == NULL)
 		return;
@@ -83,26 +83,30 @@ static void ioq_io_run(struct io_req_queue *ioq, struct io_req *ior)
 }
 
 _ctx_sched
-void ioq_sched_io_done(struct io_req_queue *ioq)
+struct io_req *ioq_ior_dequeue_sched(struct io_req_queue *ioq)
 {
-	struct io_req *ior;
 	struct list_head *e;
 
-	e = list_del_head(&ioq->in);
-	ior = list_entry(e, struct io_req, entry);
 	--ioq->busy;
+	e = list_del_head(&ioq->in);
+	return list_entry(e, struct io_req, entry);
+}
+
+_ctx_sched
+void ioq_ior_done_sched(struct io_req_queue *ioq, struct io_req *ior)
+{
 	ior->done = 1;
 	if (ior->async)
 		wq_work_add(ioq->ioc_wq, &ior->ioc.ioc_work);
 	else
 		wake_up(&ior->ioc.ioc_wait);
 
-	ior = ioq_io_next(ioq);
-	ioq_io_run(ioq, ior);
+	ior = ioq_ior_next(ioq);
+	ioq_ior_run(ioq, ior);
 }
 
 _ctx_proc
-void ioq_io_submit(struct io_req_queue *ioq, struct io_req *ior)
+void ioq_ior_submit(struct io_req_queue *ioq, struct io_req *ior)
 {
 	ior->done = 0;
 	if (ior->async == 0)
@@ -110,15 +114,15 @@ void ioq_io_submit(struct io_req_queue *ioq, struct io_req *ior)
 
 	lock_sched_lock(&ioq->in_lock);
 	list_add_tail(&ior->entry, &ioq->in);
-	ior = ioq_io_next(ioq);
+	ior = ioq_ior_next(ioq);
 	lock_sched_unlock(&ioq->in_lock);
 
-	ioq_io_run(ioq, ior);
+	ioq_ior_run(ioq, ior);
 }
 
 /* Only for synchronous wait for the completion. */
 _ctx_proc
-void ioq_io_wait(struct io_req *ior)
+void ioq_ior_wait(struct io_req *ior)
 {
 	assert(ior->async == 0);
 	wait_event(&ior->ioc.ioc_wait, ior->done == 1);
