@@ -15,46 +15,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _IOREQ_H_
-#define _IOREQ_H_
+#ifndef _SYS_IOREQ_H_
+#define _SYS_IOREQ_H_
 
-/* External IOREQ API. Used by the clients of a IO request queue. */
+/* Internal IOREQ API. Used by the providers of an IO request queue. */
+#include <list.h>
+#include <lock.h>
 
-#include <types.h>
-#include <mutex.h>
-#include <work.h>
+typedef void (*ioq_fn)(struct io_req *ior);
 
-#define IOR_TYPE_READ					1
-#define IOR_TYPE_WRITE					2
-#define IOR_TYPE_IOCTL					3
+struct io_req_queue {
+	struct list_head in;
+	int busy;
+	struct lock in_lock;
 
-struct io_req {
-	struct list_head entry;
-	char type;
-	char async;
-	char done;
-	char pad;
-	int status;
-	union {
-		struct {
-			int cmd;
-			void *arg;
-		} ioctl;
-
-		struct {
-			void *data;
-			size_t sz;
-		} rw;
-	} io;
-
-	union {
-		struct work ioc_work;
-		struct list_head ioc_wait;
-	} ioc;
+	ioq_fn ioctl;
+	ioq_fn rw;
+	struct work_queue *ioc_wq;
 };
 
-struct io_req_queue;
-
-void	ioq_io_submit(struct io_req_queue *ioq, struct io_req *ior);
-void	ioq_io_wait(struct io_req *ior);
+void	ioq_init(struct io_req_queue *ioq, ioq_fn ioctl, ioq_fn rw);
+void	ioq_sched_io_done(struct io_req_queue *ioq);
 #endif
