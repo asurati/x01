@@ -20,9 +20,35 @@
 #include <irq.h>
 #include <sched.h>
 #include <uart.h>
-
-#include <sys/sdhc.h>
+#include <sdhc.h>
+#include <mbox.h>
 
 void sd_init()
 {
+	uint32_t v, resp[4] = {-1};
+
+	sdhc_send_command(SDHC_CMD0, 0, NULL);
+
+	v = 0;
+	BF_SET(v, SDHC_CMD8_PATTERN, 0xaa);
+	BF_SET(v, SDHC_CMD8_VHS, SDHC_CMD8_VHS_27_36);
+	sdhc_send_command(SDHC_CMD8, v, resp);
+
+	v = resp[0];
+	assert(BF_GET(v, SDHC_CMD8_PATTERN) == 0xaa);
+	assert(BF_GET(v, SDHC_CMD8_VHS));
+
+	v = 0;
+	sdhc_send_command(SDHC_CMD55, 0, resp);
+	/* QRPI2 sends 0x120 as the card status. */
+	BF_SET(v, SDHC_ACMD41_VDD_32_33, 1);
+	sdhc_send_command(SDHC_ACMD41, v, resp);
+	/* QRPI2 sends 0x80ffff00 as the OCR. */
+	assert(BF_GET(resp[0], SDHC_ACMD41_VDD_32_33));
+
+	sdhc_send_command(SDHC_CMD2, 0, resp);
+	uart_send_num(resp[0]);
+	uart_send_num(resp[1]);
+	uart_send_num(resp[2]);
+	uart_send_num(resp[3]);
 }

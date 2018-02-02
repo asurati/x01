@@ -17,10 +17,14 @@
 
 #include <assert.h>
 #include <io.h>
-#include <irq.h>
+#include <ioreq.h>
 #include <mbox.h>
+#include <string.h>
 #include <div.h>
+#include <sdhc.h>
+#include <uart.h>
 
+#include <sys/ioreq.h>
 #include <sys/sdhc.h>
 
 /* Arasan/Broadcom specific SDHC implementation. */
@@ -46,6 +50,8 @@
  * :SDHC_CAP      0
  */
 
+static struct io_req_queue sdhc_ioq;
+
 _ctx_hard
 static int sdhc_hard_irq(void *data)
 {
@@ -65,10 +71,106 @@ static int sdhc_hard_irq(void *data)
 	return ret;
 }
 
+/* TODO place appropriate barriers. */
 _ctx_sched
-static int sdhc_sched_irq(void *data)
+static void sdhc_done_ioctl(struct io_req *ior)
 {
-	(void)data;
+	uint32_t *p;
+	struct sdhc_cmd_info *ci;
+
+	ci = ior->io.ioctl.arg;
+	p = ci->resp;
+
+	switch (ior->io.ioctl.cmd) {
+	case SDHC_IOCTL_COMMAND:
+		switch (ci->cmd) {
+		case SDHC_CMD2:
+			p[1] = readl(io_base + SDHC_RESP1);
+			p[2] = readl(io_base + SDHC_RESP2);
+			p[3] = readl(io_base + SDHC_RESP3);
+			/* fall through. */
+
+		case SDHC_CMD8:
+		case SDHC_CMD55:
+		case SDHC_ACMD41:
+			p[0] = readl(io_base + SDHC_RESP0);
+			break;
+		default:
+			break;
+		}
+		break;
+	default:
+		assert(0);
+		break;
+	}
+}
+
+_ctx_sched
+static int sdhc_sched_irq(void *p)
+{
+	struct io_req *ior;
+
+	ior = ioq_ior_dequeue_sched(p);
+	if (ior->type == IOR_TYPE_IOCTL)
+		sdhc_done_ioctl(ior);
+	else
+		assert(0);
+	ioq_ior_done_sched(p, ior);
+	return 0;
+}
+
+_ctx_sched
+static void sdhc_ioctl(struct io_req *ior)
+{
+	uint32_t v;
+	struct sdhc_cmd_info *ci;
+
+	ci = ior->io.ioctl.arg;
+
+	switch (ior->io.ioctl.cmd) {
+	case SDHC_IOCTL_COMMAND:
+		writel(ci->arg, io_base + SDHC_ARG1);
+		v = 0;
+		BF_SET(v, SDHC_CMD_IXCHK_EN, 1);
+		BF_SET(v, SDHC_CMD_CRCCHK_EN, 1);
+		BF_SET(v, SDHC_CMD_INDEX, ci->cmd);
+
+		switch (ci->cmd) {
+		case SDHC_CMD8:
+		case SDHC_CMD55:
+		case SDHC_ACMD41:
+			BF_SET(v, SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_48);
+			break;
+		case SDHC_CMD2:
+			BF_SET(v, SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_136);
+			break;
+		default:
+			break;
+		}
+		writel(v, io_base + SDHC_CMDTM);
+		break;
+	default:
+		assert(0);
+		break;
+	}
+}
+
+_ctx_proc
+int sdhc_send_command(enum sdhc_cmd cmd, uint32_t arg, void *resp)
+{
+	struct io_req ior;
+	struct sdhc_cmd_info ci;
+
+	ci.cmd = cmd;
+	ci.arg = arg;
+	ci.resp = resp;
+
+	memset(&ior, 0, sizeof(ior));
+	ior.type = IOR_TYPE_IOCTL;
+	ior.io.ioctl.cmd = SDHC_IOCTL_COMMAND;
+	ior.io.ioctl.arg = &ci;
+	ioq_ior_submit(&sdhc_ioq, &ior);
+	ioq_ior_wait(&ior);
 	return 0;
 }
 
@@ -90,8 +192,10 @@ void sdhc_init()
 	ver = BF_GET(ver, SDHC_VER_HC);
 	assert(ver == 1 || ver == 2);
 
+	ioq_init(&sdhc_ioq, sdhc_ioctl, NULL);
+
 	irq_hard_insert(IRQ_HARD_SDHC, sdhc_hard_irq, NULL);
-	irq_sched_insert(IRQ_SCHED_SDHC, sdhc_sched_irq, NULL);
+	irq_sched_insert(IRQ_SCHED_SDHC, sdhc_sched_irq, &sdhc_ioq);
 
 
 	/* Turn off power to the SD Bus. The controller does not expose the

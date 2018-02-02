@@ -56,6 +56,9 @@
 #define SDHC_CMD_TYPE_POS			22
 #define SDHC_CMD_INDEX_POS			24
 
+#define SDHC_CMD_RESP_136			 1
+#define SDHC_CMD_RESP_48			 2
+
 #define SDHC_TM_BLKCNT_EN_SZ			 1
 #define SDHC_TM_AUTO_CMD_EN_SZ			 2
 #define SDHC_TM_DAT_DIR_SZ			 1
@@ -127,4 +130,12 @@
 #define SDHC_VER_HC_SZ				 8
 
 #define SDHC_MIN_FREQ			    400000
+
+#define SDHC_IOCTL_COMMAND			 1
+
+struct sdhc_cmd_info {
+	enum sdhc_cmd cmd;
+	uint32_t arg;
+	void *resp;
+};
 #endif
