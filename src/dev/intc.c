@@ -35,15 +35,27 @@
  * The RPi Mailbox IRQ is at bit 1 in the Basic
  * (EN_BASIC) register.
  *
- * Avoid using the Basic registers of the interrupt
- * controller.
  */
 
-#define INTC_IRQ_STIMER_POS		3
-#define INTC_IRQ_MBOX_POS		1
+/*
+ * sdhci: sdhci {
+ *	compatible = "brcm,bcm2835-sdhci";
+ *	reg = <0x7e300000 0x100>;
+ *	interrupts = <2 30>;
+ *	clocks = <&clk_mmc>;
+ *	bus-width = <4>;
+ * };
+ *
+ * SDHCI interrupts is line# 62 = 32 + 30 = bit 30 of EN2
+ */
 
-#define INTC_IRQ_STIMER_SZ		1
-#define INTC_IRQ_MBOX_SZ		1
+#define INTC_IRQ_STIMER_POS		 3
+#define INTC_IRQ_MBOX_POS		 1
+#define INTC_IRQ_SDHC_POS		30
+
+#define INTC_IRQ_STIMER_SZ		 1
+#define INTC_IRQ_MBOX_SZ		 1
+#define INTC_IRQ_SDHC_SZ		 1
 
 /* On QRPI2, this controller does not manage the Core timers. */
 void intc_init()
@@ -58,7 +70,12 @@ void intc_init()
 	BF_SET(v, INTC_IRQ_MBOX, 1);
 	writel(v, io_base + INTC_EN_BASIC);
 
+	v = readl(io_base + INTC_EN2);
+	BF_SET(v, INTC_IRQ_SDHC, 1);
+	writel(v, io_base + INTC_EN2);
+
 #ifdef RPI
+	/* Enable RPi SoC timer. */
 	v = readl(io_base + INTC_EN1);
 	BF_SET(v, INTC_IRQ_STIMER, 1);
 	writel(v, io_base + INTC_EN1);
