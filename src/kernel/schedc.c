@@ -338,7 +338,7 @@ void mutex_unlock(struct mutex *m)
  */
 _ctx_soft
 _ctx_sched
-static int sched_irq_sched_timer(void *data)
+static int sched_irq_timer(void *data)
 {
 	int i;
 	uint32_t mask;
@@ -454,7 +454,7 @@ void sched_init()
 		init_list_head(&timer_heads[i]);
 
 	irq_sched_insert(IRQ_SCHED_SCHEDULE, sched_irq_schedule, NULL);
-	irq_sched_insert(IRQ_SCHED_TIMER, sched_irq_sched_timer, NULL);
+	irq_sched_insert(IRQ_SCHED_TIMER, sched_irq_timer, NULL);
 
 	idle = sched_thread_create(sched_idle, NULL);
 }
