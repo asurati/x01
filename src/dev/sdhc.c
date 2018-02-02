@@ -85,11 +85,12 @@ static void sdhc_done_ioctl(struct io_req *ior)
 	case SDHC_IOCTL_COMMAND:
 		switch (ci->cmd) {
 		case SDHC_CMD2:
+		case SDHC_CMD9:
 			p[1] = readl(io_base + SDHC_RESP1);
 			p[2] = readl(io_base + SDHC_RESP2);
 			p[3] = readl(io_base + SDHC_RESP3);
 			/* fall through. */
-
+		case SDHC_CMD3:
 		case SDHC_CMD8:
 		case SDHC_CMD55:
 		case SDHC_ACMD41:
@@ -136,12 +137,14 @@ static void sdhc_ioctl(struct io_req *ior)
 		BF_SET(v, SDHC_CMD_INDEX, ci->cmd);
 
 		switch (ci->cmd) {
+		case SDHC_CMD3:
 		case SDHC_CMD8:
 		case SDHC_CMD55:
 		case SDHC_ACMD41:
 			BF_SET(v, SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_48);
 			break;
 		case SDHC_CMD2:
+		case SDHC_CMD9:
 			BF_SET(v, SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_136);
 			break;
 		default:

@@ -21,10 +21,15 @@
 enum sdhc_cmd {
 	SDHC_CMD0 = 0,
 	SDHC_CMD2 = 2,
+	SDHC_CMD3 = 3,
 	SDHC_CMD8 = 8,
+	SDHC_CMD9 = 9,
 	SDHC_ACMD41 = 41,
 	SDHC_CMD55 = 55
 };
+
+#define SDHC_CMD3_RCA_POS			16
+#define SDHC_CMD3_RCA_SZ			16
 
 #define SDHC_CMD8_PATTERN_POS			 0
 #define SDHC_CMD8_VHS_POS			 8
@@ -32,6 +37,9 @@ enum sdhc_cmd {
 #define SDHC_CMD8_VHS_SZ			 4
 
 #define SDHC_CMD8_VHS_27_36			 1
+
+#define SDHC_CMD9_RCA_POS			16
+#define SDHC_CMD9_RCA_SZ			16
 
 #define SDHC_ACMD41_VDD_32_33_POS		20
 #define SDHC_ACMD41_VDD_32_33_SZ		 1

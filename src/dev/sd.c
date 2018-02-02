@@ -22,13 +22,97 @@
 #include <uart.h>
 #include <sdhc.h>
 #include <mbox.h>
+#include <mmu.h>
+#include <string.h>
+
+/*
+ *
+beef0062    8
+2101dead   40
+51454d55   72
+00aa5859  104
+
+ff926000    8
+09ffffdf   40
+5a5f59e0   72
+00002600  104
+
+*/
+
+struct sd_cid {
+	uint8_t mid;
+	uint16_t oid;
+	uint8_t pnm[5];
+	uint8_t prv;
+	uint32_t psn;
+	uint16_t mdt;
+};
+
+struct sd_csd {
+	uint8_t tran_speed;
+	uint8_t dsr;
+	uint16_t c_sz;
+	uint8_t c_sz_mul;
+	uint8_t read_bl_len;
+};
+
+void sd_parse_csd(const uint32_t resp[4])
+{
+	size_t sz;
+	struct sd_csd c;
+
+	c.tran_speed = (resp[2] >> 24) & 0xff;
+	c.dsr = (resp[2] >> 4) & 1;
+	c.c_sz  = (resp[1] >> 22) & 0x3ff;
+	c.c_sz |= (resp[2] & 3) << 10;
+	c.c_sz_mul = (resp[1] >> 7) & 7;
+	c.read_bl_len = (resp[2] >> 8) & 0xf;
+
+	uart_send_num(c.tran_speed);//5a
+
+	sz = c.c_sz + 1;
+	sz *= 1 << (c.c_sz_mul + 2);
+	sz *= 1 << c.read_bl_len;
+	uart_send_num(sz);
+}
+
+void sd_parse_cid(const uint32_t resp[4])
+{
+	char pnm[16] = {0};
+	struct sd_cid c;
+
+	c.mdt	 = resp[0] & 0x0fff;
+	c.psn	 = resp[0] >> 16;
+	c.psn	|= (resp[1] & 0xffff) << 16;
+	c.prv	 = (resp[1] >> 16) & 0xff;
+	c.pnm[4] = (resp[1] >> 24) & 0xff;
+	c.pnm[3] = (resp[2] >>  0) & 0xff;
+	c.pnm[2] = (resp[2] >>  8) & 0xff;
+	c.pnm[1] = (resp[2] >> 16) & 0xff;
+	c.pnm[0] = (resp[2] >> 24) & 0xff;
+	c.oid	 = resp[3] & 0xffff;
+	c.mid	 = (resp[3] >> 16) & 0xff;
+
+	memcpy(pnm, c.pnm, 5);
+	pnm[5] = '\r';
+	pnm[6] = '\n';
+
+	uart_send_num(c.mid);
+	uart_send_num(c.oid);
+	uart_send_str(pnm);
+	uart_send_num(c.prv);
+	uart_send_num(c.psn);
+	uart_send_num(c.mdt);
+}
 
 void sd_init()
 {
-	uint32_t v, resp[4] = {-1};
+	uint32_t v, resp[4] = {-1}, addr;
 
+	/* Go Idle State. */
 	sdhc_send_command(SDHC_CMD0, 0, NULL);
 
+	/* Send IF Condition. */
 	v = 0;
 	BF_SET(v, SDHC_CMD8_PATTERN, 0xaa);
 	BF_SET(v, SDHC_CMD8_VHS, SDHC_CMD8_VHS_27_36);
@@ -38,6 +122,7 @@ void sd_init()
 	assert(BF_GET(v, SDHC_CMD8_PATTERN) == 0xaa);
 	assert(BF_GET(v, SDHC_CMD8_VHS));
 
+	/* Send OP Condition. */
 	v = 0;
 	sdhc_send_command(SDHC_CMD55, 0, resp);
 	/* QRPI2 sends 0x120 as the card status. */
@@ -46,9 +131,20 @@ void sd_init()
 	/* QRPI2 sends 0x80ffff00 as the OCR. */
 	assert(BF_GET(resp[0], SDHC_ACMD41_VDD_32_33));
 
+	/* Send All CID. */
 	sdhc_send_command(SDHC_CMD2, 0, resp);
-	uart_send_num(resp[0]);
-	uart_send_num(resp[1]);
-	uart_send_num(resp[2]);
-	uart_send_num(resp[3]);
+	sd_parse_cid(resp);
+
+	/* Send RCA. */
+	v = 0;
+	sdhc_send_command(SDHC_CMD3, 0, resp);
+
+	addr = BF_GET(resp[0], SDHC_CMD3_RCA);
+	(void)addr;
+
+	/* Send CSD. */
+	v = 0;
+	BF_SET(v, SDHC_CMD9_RCA, addr);
+	sdhc_send_command(SDHC_CMD9, v, resp);
+	sd_parse_csd(resp);
 }
