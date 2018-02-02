@@ -27,12 +27,6 @@ extern void * const io_base;
 extern void * const ctrl_base;
 #endif /* QRPI2 */
 
-/* Word here stands for 16bits. */
-static inline uint16_t readw(const void *addr)
-{
-	return *(const volatile uint16_t *)addr;
-}
-
 static inline uint32_t readl(const void *addr)
 {
 	return *(const volatile uint32_t *)addr;
