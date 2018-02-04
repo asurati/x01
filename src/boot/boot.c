@@ -69,54 +69,51 @@ void boot_map()
 	 * virtual addresses.
 	 */
 	for (i = 0; i < 4; ++i) {
-		de = 0;
-		BF_SET(de, PDE_TYPE0, 2);	/* Section. */
-		BF_SET(de, PDE_S_BASE, i);	/* Base. */
-		BF_SET(de, PDE_AP, 1);		/* Supervisor-only, RW. */
-		BF_SET(de, PDE_C, 1);		/* I/O WB, AoW. */
-		BF_SET(de, PDE_B, 1);
-		BF_SET(de, PDE_TEX, 1);
+		de  = bits_set(PDE_TYPE0, 2);	/* Section. */
+		de |= bits_set(PDE_S_BASE, i);	/* Base. */
+		de |= bits_set(PDE_AP, 1);	/* Supervisor-only, RW. */
+		de |= bits_on(PDE_C);		/* I/O WB, AoW. */
+		de |= bits_on(PDE_B);		/* I/O WB, AoW. */
+		de |= bits_set(PDE_TEX, 1);
 		pd[i] = de;
 	}
 
 	/* First 4MB RAM mapped to first 4MB @ KMODE_VA using small pages. */
 	kmode_va = (uintptr_t)&KMODE_VA;
-	j = BF_GET(kmode_va, VA_PDE_IX);
+	j = bits_get(kmode_va, VA_PDE_IX);
 	pa = (uintptr_t)&k_pt_pa;
 	for (i = 0; i < 4; ++i, pa += 0x400) {
-		de = 0;
-		BF_SET(de, PDE_TYPE0, 1);	/* PT. */
-		BF_PUSH(de, PDE_PT_BASE, pa);
+		de  = bits_set(PDE_TYPE0, 1);	/* PT. */
+		de |= bits_push(PDE_PT_BASE, pa);
 		pd[i + j] = de;
 	}
 
 	for (i = 0; (unsigned)i < ARRAY_SIZE(si); ++i) {
 		for (va = si[i].start; va < si[i].end; va += PAGE_SIZE) {
-			j = BF_GET(va, VA_PDE_IX);
+			j = bits_get(va, VA_PDE_IX);
 
-			pa = BF_PULL(pd[j], PDE_PT_BASE);
+			pa = bits_pull(pd[j], PDE_PT_BASE);
 			pt = (void *)pa;
 
-			te = 0;
 			c = si[i].desc;
 
-			BF_SET(te, PTE_TYPE, 2);	/* Small Page. */
-			BF_SET(te, PTE_AP, 1);		/* Supervisor-only. */
+			te  = bits_set(PTE_TYPE, 2);	/* Small Page. */
+			te |= bits_set(PTE_AP, 1);	/* Supervisor-only. */
 
 			/* no execute. */
 			if ((c & 1) == 0)
-				BF_SET(te, PTE_SP_XN, 1);
+				te |= bits_on(PTE_SP_XN);
 
 			/* no write. */
 			if ((c & 2) == 0)
-				BF_SET(te, PTE_APX, 1);
+				te |= bits_on(PTE_APX);
 
-			BF_SET(te, PTE_C, 1);		/* I/O WB, AoW. */
-			BF_SET(te, PTE_B, 1);
-			BF_SET(te, PTE_SP_TEX, 1);
-			BF_PUSH(te, PTE_SP_BASE, va - kmode_va);
+			te |= bits_on(PTE_C);		/* I/O WB, AoW. */
+			te |= bits_on(PTE_B);
+			te |= bits_set(PTE_SP_TEX, 1);
+			te |= bits_push(PTE_SP_BASE, va - kmode_va);
 
-			j = BF_GET(va, VA_PTE_IX);
+			j = bits_get(va, VA_PTE_IX);
 			pt[j]  = te;
 		}
 	}
