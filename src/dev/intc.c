@@ -66,18 +66,18 @@ void intc_init()
 	writel(0, io_base + INTC_FIQ);
 
 	/* Enable MBOX interrupt. */
-	v = readl(io_base + INTC_EN_BASIC);
-	BF_SET(v, INTC_IRQ_MBOX, 1);
+	v  = readl(io_base + INTC_EN_BASIC);
+	v |= bits_on(INTC_IRQ_MBOX);
 	writel(v, io_base + INTC_EN_BASIC);
 
-	v = readl(io_base + INTC_EN2);
-	BF_SET(v, INTC_IRQ_SDHC, 1);
+	v  = readl(io_base + INTC_EN2);
+	v |= bits_on(INTC_IRQ_SDHC);
 	writel(v, io_base + INTC_EN2);
 
 #ifdef RPI
 	/* Enable RPi SoC timer. */
-	v = readl(io_base + INTC_EN1);
-	BF_SET(v, INTC_IRQ_STIMER, 1);
+	v  = readl(io_base + INTC_EN1);
+	v |= bits_on(INTC_IRQ_STIMER);
 	writel(v, io_base + INTC_EN1);
 #endif
 }
