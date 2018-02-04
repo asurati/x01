@@ -53,6 +53,49 @@
 		(v) |= ((w) & BF_MASK(f)) << f ## _POS; \
 	} while (0)
 
+static inline uintptr_t bits_mask(size_t sz)
+{
+	return (1ull << sz) - 1;
+}
+
+static inline uintptr_t bits_arrange(uintptr_t pos, size_t sz, uintptr_t val)
+{
+	return (val & bits_mask(sz)) << pos;
+}
+
+static inline uintptr_t bits_extract(uintptr_t val, uintptr_t pos, size_t sz)
+{
+	return (val >> pos) & bits_mask(sz);
+}
+
+#define bits_set(flag, val)	bits_arrange(flag ## _POS, flag ## _SZ, (val))
+#define bits_get(val, flag)	bits_extract(val, flag ## _POS, flag ## _SZ)
+
+static inline uintptr_t bits_extract_nodatashift(uintptr_t val, uintptr_t pos,
+						 size_t sz)
+{
+	return val & (bits_mask(sz) << pos);
+}
+
+#define bits_pull(val, flag)						\
+	bits_extract_nodatashift(val, flag ## _POS, flag ## _SZ
+
+#define bits_push(flag, val)						\
+	bits_extract_nodatashift(val, flag ## _POS, flag ## _SZ
+
+static inline uintptr_t _bits_on(uintptr_t pos, size_t sz)
+{
+	return bits_mask(sz) << pos;
+}
+
+static inline uintptr_t _bits_off(uintptr_t pos, size_t sz)
+{
+	return ~_bits_on(pos, sz);
+}
+
+#define bits_on(flag)	_bits_on(flag ## _POS, flag ## _SZ)
+#define bits_off(flag)	_bits_off(flag ## _POS, flag ## _SZ)
+
 /* Non-shifted values. */
 #define BF_PULL(v, f)		((v) & BF_SMASK(f))
 #define BF_PUSH(v, f, w) \
