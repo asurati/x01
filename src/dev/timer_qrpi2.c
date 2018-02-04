@@ -116,7 +116,7 @@ char timer_is_asserted()
 	uint32_t v;
 
 	v = timer_reg_read(TMR_CTRL);
-	if (BF_GET(v, TMR_CTRL_STATUS))
+	if (bits_get(v, TMR_CTRL_STATUS))
 		return 1;
 	else
 		return 0;

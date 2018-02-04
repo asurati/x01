@@ -51,10 +51,9 @@ char timer_is_asserted()
 {
 	uint32_t v;
 	v = readl(io_base + TMR_CS);
-	if (BF_GET(v, TMR_CS_M3)) {
+	if (bits_get(v, TMR_CS_M3)) {
 		/* Deassert the signal. */
-		v = 0;
-		BF_SET(v, TMR_CS_M3, 1);
+		v = bits_on(TMR_CS_M3);
 		writel(v, io_base + TMR_CS);
 		return 1;
 	} else {
