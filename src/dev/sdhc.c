@@ -21,7 +21,6 @@
 #include <mbox.h>
 #include <string.h>
 #include <div.h>
-#include <sdhc.h>
 #include <uart.h>
 
 #include <sys/ioreq.h>
@@ -52,24 +51,26 @@
  * :SDHC_CAP      0
  */
 
-static struct io_req_queue sdhc_ioq;
+static struct sdhc_softc softc;
 
 _ctx_hard
-static int sdhc_hard_irq(void *data)
+static int sdhc_hard_irq(void *p)
 {
 	int ret;
 	uint32_t v;
+	struct sdhc_softc *sc;
 
-	(void)data;
+	sc = p;
 	ret = IRQH_RET_NONE;
 
 	v = readl(io_base + SDHC_INT);
 	if (v == 0)
 		return IRQH_RET_NONE;
 
+	sc->sc_int |= v;
+
 	writel(v, io_base + SDHC_INT);
-	if (v & 1)
-		irq_sched_raise(IRQ_SCHED_SDHC);
+	irq_sched_raise(IRQ_SCHED_SDHC);
 	ret = IRQH_RET_HANDLED | IRQH_RET_SCHED;
 	return ret;
 }
@@ -114,21 +115,37 @@ static void sdhc_done_ioctl(struct io_req *ior)
 _ctx_sched
 static int sdhc_sched_irq(void *p)
 {
+	uintptr_t sc_int;
 	struct io_req *ior;
+	struct sdhc_softc *sc;
 
-	ior = ioq_ior_dequeue_sched(p);
-	if (ior->type == IOR_TYPE_IOCTL)
-		sdhc_done_ioctl(ior);
-	else
-		assert(0);
-	ioq_ior_done_sched(p, ior);
+	sc = p;
+
+	/* Assumption: An IRQ is not raised for SDHC while its sched IRQ routine
+	 * is running.
+	 */
+	sc_int = sc->sc_int;
+	sc->sc_int = 0;
+
+	if (bits_get(sc_int, SDHC_INT_CMD)) {
+		ior = ioq_ior_dequeue_sched(&sc->sc_ioq);
+		/* TODO Support more informative errors. */
+		ior->status = 0;
+		if (bits_get(sc_int, SDHC_INT_ERR))
+			ior->status = -1;
+		else if (ior->type == IOR_TYPE_IOCTL)
+			sdhc_done_ioctl(ior);
+		else
+			assert(0);
+		ioq_ior_done_sched(&sc->sc_ioq, ior);
+	}
 	return 0;
 }
 
 _ctx_sched
 static void sdhc_ioctl(struct io_req *ior)
 {
-	uint32_t v;
+	uint32_t v, sz;
 	struct sdhc_cmd_info *ci;
 
 	ci = ior->io.ioctl.arg;
@@ -141,7 +158,10 @@ static void sdhc_ioctl(struct io_req *ior)
 		if (ci->cmd == SDHC_CMD17) {
 			v |= bits_on(SDHC_CMD_ISDATA);
 			v |= bits_on(SDHC_TM_DAT_DIR);
-			writel((1 << 16) | (512), io_base + SDHC_BLKSZCNT);
+
+			sz  = bits_set(SDHC_BLKSZ, SDHC_BLK_SIZE);
+			sz |= bits_set(SDHC_BLKCNT, 1);
+			writel(sz, io_base + SDHC_BLKSZCNT);
 		}
 		v |= bits_set(SDHC_CMD_INDEX, ci->cmd);
 
@@ -183,43 +203,174 @@ int sdhc_send_command(enum sdhc_cmd cmd, uint32_t arg, void *resp)
 	ior.type = IOR_TYPE_IOCTL;
 	ior.io.ioctl.cmd = SDHC_IOCTL_COMMAND;
 	ior.io.ioctl.arg = &ci;
-	ioq_ior_submit(&sdhc_ioq, &ior);
+	ioq_ior_submit(&softc.sc_ioq, &ior);
 	ioq_ior_wait(&ior);
-	return 0;
+	return ior.status;
 }
 
 _ctx_proc
-uint32_t sdhc_read_data()
+static void sdhc_go_idle_state()
 {
-	return readl(io_base + SDHC_DATA);
+	int ret;
+	ret = sdhc_send_command(SDHC_CMD0, 0, NULL);
+	assert(ret == 0);
 }
 
-int sdhc_go_idle_state()
+_ctx_proc
+static void sdhc_send_if_condition()
 {
-	sdhc_send_command(SDHC_CMD0, 0, NULL);
-	return 0;
+	int ret;
+	uint32_t v, resp;
+
+	resp = 0;
+	v  = bits_set(SDHC_CMD8_PATTERN, 0xaa);
+	v |= bits_set(SDHC_CMD8_VHS, SDHC_CMD8_VHS_27_36);
+	ret = sdhc_send_command(SDHC_CMD8, v, &resp);
+	assert(ret == 0);
+	assert(bits_get(resp, SDHC_CMD8_PATTERN) == 0xaa);
+	assert(bits_get(resp, SDHC_CMD8_VHS) & SDHC_CMD8_VHS_27_36);
 }
 
-int sdhc_send_if_condition(int vhs, uint8_t pattern)
+_ctx_proc
+static void sdhc_send_op_condition()
 {
-	uint32_t v = 0;
-	v  = bits_set(SDHC_CMD8_PATTERN, pattern);
-	v |= bits_set(SDHC_CMD8_VHS, vhs);
-	sdhc_send_command(SDHC_CMD8, v, NULL);
-	return 0;
+	int ret;
+	uint32_t v, card_sts, resp;
+
+	card_sts = 0;
+	ret = sdhc_send_command(SDHC_CMD55, 0, &card_sts);
+	assert(ret == 0);
+	/* QRPI2 sends 0x120 as the card status. */
+	assert(card_sts & (1 << 5));
+	assert(card_sts & (1 << 8));
+
+	resp = 0;
+	v = bits_on(SDHC_ACMD41_VDD_32_33);
+	ret = sdhc_send_command(SDHC_ACMD41, v, &resp);
+	assert(ret == 0);
+	/* QRPI2 sends 0x80ffff00 as the OCR. */
+	assert(bits_get(resp, SDHC_ACMD41_VDD_32_33));
+	/* We support only standard capacity cards, SDSC. */
+	assert(bits_get(resp, SDHC_ACMD41_CS) == 0);
 }
+
+_ctx_proc
+static void sdhc_send_all_cid()
+{
+	int ret;
+	uint32_t cid[4];
+	ret = sdhc_send_command(SDHC_CMD2, 0, cid);
+	assert(ret == 0);
+}
+
+_ctx_proc
+static void sdhc_send_rca()
+{
+	int ret;
+	uint32_t resp;
+
+	ret = sdhc_send_command(SDHC_CMD3, 0, &resp);
+	assert(ret == 0);
+	softc.sc_addr = bits_get(resp, SDHC_CMD3_RCA);
+}
+
+_ctx_proc
+static void sdhc_send_csd()
+{
+	int ret;
+	uint32_t csd[4], v;
+
+	v = bits_set(SDHC_CMD9_RCA, softc.sc_addr);
+	ret = sdhc_send_command(SDHC_CMD9, v, csd);
+	assert(ret == 0);
+}
+
+_ctx_proc
+static void sdhc_select_card()
+{
+	int ret;
+	uint32_t v, resp;
+
+	v = bits_set(SDHC_CMD7_RCA, softc.sc_addr);
+	ret = sdhc_send_command(SDHC_CMD7, v, &resp);
+	assert(ret == 0);
+	/* Card Status is 0x700 - standby mode, ready for data. */
+}
+
+_ctx_proc
+static void sdhc_read_block(void *buf)
+{
+	int ret, i;
+	uint32_t resp;
+	uint32_t *p;
+
+	ret = sdhc_send_command(SDHC_CMD17, 0, &resp);
+	assert(ret == 0);
+	/* Card Status is 0x900 - transfer mode, ready for data. */
+
+	p = buf;
+	for (i = 0; i < 512 / 4; ++i)
+		p[i] = readl(io_base + SDHC_DATA);
+}
+
+_ctx_proc
+static void sdhc_set_sdclock(uint32_t freq)
+{
+	int div;
+	uint32_t clk, ver, v;
+
+	clk = softc.sc_emmc_clk;
+	/* Disable the internal clock and the SDCLK. */
+	writel(0, io_base + SDHC_CNTRL1);
+
+	ver = readl(io_base + SDHC_SLOT_ISR_VER);
+	ver = bits_get(ver, SDHC_VER_HC);
+	if (ver == 1) {
+		/* Spec 2.0. */
+		for (div = 1; div <= 8; ++div)
+			if ((clk >> div) <= freq)
+				break;
+		assert((clk >> div) <= freq);
+		div = (1 << div) >> 1;
+		v = bits_set(SDHC_C1_CLKF_LO, div);
+	} else {
+		/* Spec 3.0. */
+		for (div = 2; div < 2048; div += 2)
+			if (clk / div <= freq)
+				break;
+		assert(div < 2048);
+		div >>= 1;
+		v  = bits_set(SDHC_C1_CLKF_LO, div);
+		v |= bits_set(SDHC_C1_CLKF_HI, div >> 8);
+	}
+
+	v |= bits_on(SDHC_C1_CLK_EN);
+	writel(v, io_base + SDHC_CNTRL1);
+
+	/* Wait for internal clock stabilization. */
+	while (1) {
+		v = readl(io_base + SDHC_CNTRL1);
+		if (bits_get(v, SDHC_C1_CLK_STABLE))
+			break;
+	}
+
+	/* Enable clock to the SD Bus. */
+	v |= bits_on(SDHC_C1_SDCLK_EN);
+	writel(v, io_base + SDHC_CNTRL1);
+}
+
 
 /* Turn OFF Interrupts, Clocks, and Power.
  * Reset all.
  * Set the SD Bus clock frequency to 400khz, and enable the clock.
  * Set the Power to 3v3, and turn it ON.
  * Turn ON all interrupts.
+ * Initialize the card if inserted.
  */
 
 _ctx_init
 void sdhc_init()
 {
-	int div;
 	uint32_t v, clk, ver;
 
 	/* Support HC versions 2.0 or 3.0. */
@@ -227,10 +378,11 @@ void sdhc_init()
 	ver = bits_get(ver, SDHC_VER_HC);
 	assert(ver == 1 || ver == 2);
 
-	ioq_init(&sdhc_ioq, sdhc_ioctl, NULL);
+	memset(&softc, 0, sizeof(softc));
+	ioq_init(&softc.sc_ioq, sdhc_ioctl, NULL);
 
-	irq_hard_insert(IRQ_HARD_SDHC, sdhc_hard_irq, NULL);
-	irq_sched_insert(IRQ_SCHED_SDHC, sdhc_sched_irq, &sdhc_ioq);
+	irq_hard_insert(IRQ_HARD_SDHC, sdhc_hard_irq, &softc);
+	irq_sched_insert(IRQ_SCHED_SDHC, sdhc_sched_irq, &softc);
 
 	/* Turn off power to the SD Bus. The controller does not expose the
 	 * typical power control register. The corresponding bits are marked
@@ -261,39 +413,8 @@ void sdhc_init()
 	 * instead of the 8-bit encoded divisor used within SDHC 2.0
 	 * controllers.
 	 */
-	clk = mbox_clk_rate_get(MBOX_CLK_EMMC);
-	if (ver == 1) {
-		/* Spec 2.0. */
-		for (div = 1; div <= 8; ++div)
-			if ((clk >> div) <= SDHC_MIN_FREQ)
-				break;
-		assert((clk >> div) <= SDHC_MIN_FREQ);
-		div = (1 << div) >> 1;
-		v = bits_set(SDHC_C1_CLKF_LO, div);
-	} else {
-		/* Spec 3.0. */
-		for (div = 2; div < 2048; div += 2)
-			if (clk / div <= SDHC_MIN_FREQ)
-				break;
-		assert(div < 2048);
-		div >>= 1;
-		v  = bits_set(SDHC_C1_CLKF_LO, div);
-		v |= bits_set(SDHC_C1_CLKF_HI, div >> 8);
-	}
-
-	v |= bits_on(SDHC_C1_CLK_EN);
-	writel(v, io_base + SDHC_CNTRL1);
-
-	/* Wait for internal clock stabilization. */
-	while (1) {
-		v = readl(io_base + SDHC_CNTRL1);
-		if (bits_get(v, SDHC_C1_CLK_STABLE))
-			break;
-	}
-
-	/* Enable clock to the SD Bus. */
-	v |= bits_on(SDHC_C1_SDCLK_EN);
-	writel(v, io_base + SDHC_CNTRL1);
+	softc.sc_emmc_clk = clk = mbox_clk_rate_get(MBOX_CLK_EMMC);
+	sdhc_set_sdclock(SDHC_MIN_FREQ);
 
 	/* RPi supports 3v3. Set and enable power. */
 	v  = bits_set(SDHC_C0_SDBUS_VOLT, 7);
@@ -303,4 +424,80 @@ void sdhc_init()
 	/* Enable and unmask all interrupts. */
 	writel(-1, io_base + SDHC_INT_MASK);
 	writel(-1, io_base + SDHC_INT_EN);
+
+	/* Is a card inserted. */
+	if ((readl(io_base + SDHC_STATUS) & (1 << 16)) == 0)
+		return;
+
+	/* If a card is found inserted, initialize it. */
+	sdhc_go_idle_state();
+	sdhc_send_if_condition();
+	sdhc_send_op_condition();
+	sdhc_send_all_cid();
+	sdhc_send_rca();
+	sdhc_send_csd();
+	sdhc_select_card();
+	(void)sdhc_read_block;
 }
+
+/*
+   beef0062    8
+   2101dead   40
+   51454d55   72
+   00aa5859  104
+
+   ff926000    8
+   09ffffdf   40
+   5a5f59e0   72
+   00002600  104
+*/
+#if 0
+void sd_parse_csd(const uint32_t resp[4])
+{
+	size_t sz;
+	struct sd_csd c;
+
+	c.tran_speed = (resp[2] >> 24) & 0xff;
+	c.dsr = (resp[2] >> 4) & 1;
+	c.c_sz  = (resp[1] >> 22) & 0x3ff;
+	c.c_sz |= (resp[2] & 3) << 10;
+	c.c_sz_mul = (resp[1] >> 7) & 7;
+	c.read_bl_len = (resp[2] >> 8) & 0xf;
+
+	uart_send_num(c.tran_speed);//5a
+
+	sz = c.c_sz + 1;
+	sz *= 1 << (c.c_sz_mul + 2);
+	sz *= 1 << c.read_bl_len;
+	uart_send_num(sz);
+}
+
+void sd_parse_cid(const uint32_t resp[4])
+{
+	char pnm[16] = {0};
+	struct sd_cid c;
+
+	c.mdt	 = resp[0] & 0x0fff;
+	c.psn	 = resp[0] >> 16;
+	c.psn	|= (resp[1] & 0xffff) << 16;
+	c.prv	 = (resp[1] >> 16) & 0xff;
+	c.pnm[4] = (resp[1] >> 24) & 0xff;
+	c.pnm[3] = (resp[2] >>  0) & 0xff;
+	c.pnm[2] = (resp[2] >>  8) & 0xff;
+	c.pnm[1] = (resp[2] >> 16) & 0xff;
+	c.pnm[0] = (resp[2] >> 24) & 0xff;
+	c.oid	 = resp[3] & 0xffff;
+	c.mid	 = (resp[3] >> 16) & 0xff;
+
+	memcpy(pnm, c.pnm, 5);
+	pnm[5] = '\r';
+	pnm[6] = '\n';
+
+	uart_send_num(c.mid);
+	uart_send_num(c.oid);
+	uart_send_str(pnm);
+	uart_send_num(c.prv);
+	uart_send_num(c.psn);
+	uart_send_num(c.mdt);
+}
+#endif

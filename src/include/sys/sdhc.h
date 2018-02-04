@@ -18,6 +18,8 @@
 #ifndef _SYS_SDHC_H_
 #define _SYS_SDHC_H_
 
+#include <sys/ioreq.h>
+
 #define SDHC_BASE				0x300000
 
 #define SDHC_ARG2				(SDHC_BASE)
@@ -126,16 +128,82 @@
 #define SDHC_C1_RESET_CMD_SZ			 1
 #define SDHC_C1_RESET_DATA_SZ			 1
 
+#define SDHC_INT_ERR_POS			15
+#define SDHC_INT_CMD_POS			 0
+#define SDHC_INT_ERR_SZ				 1
+#define SDHC_INT_CMD_SZ				 1
+
 #define SDHC_VER_HC_POS				16
 #define SDHC_VER_HC_SZ				 8
 
-#define SDHC_MIN_FREQ			    400000
-
 #define SDHC_IOCTL_COMMAND			 1
+
+#define SDHC_MIN_FREQ			    400000
+#define SDHC_BLK_SIZE			       512
+
+enum sdhc_cmd {
+	SDHC_CMD0,
+	SDHC_CMD1,
+	SDHC_CMD2,
+	SDHC_CMD3,
+
+	SDHC_CMD7 = 7,
+	SDHC_CMD8,
+	SDHC_CMD9,
+
+	SDHC_CMD17 = 17,
+	SDHC_ACMD41 = 41,
+	SDHC_CMD55 = 55
+};
+
+#define SDHC_CMD3_RCA_POS			16
+#define SDHC_CMD3_RCA_SZ			16
+
+#define SDHC_CMD7_RCA_POS			16
+#define SDHC_CMD7_RCA_SZ			16
+
+#define SDHC_CMD8_PATTERN_POS			 0
+#define SDHC_CMD8_VHS_POS			 8
+#define SDHC_CMD8_PATTERN_SZ			 8
+#define SDHC_CMD8_VHS_SZ			 4
+
+#define SDHC_CMD8_VHS_27_36			 1
+
+#define SDHC_CMD9_RCA_POS			16
+#define SDHC_CMD9_RCA_SZ			16
+
+#define SDHC_ACMD41_VDD_32_33_POS		20
+#define SDHC_ACMD41_CS_POS			30
+#define SDHC_ACMD41_VDD_32_33_SZ		 1
+#define SDHC_ACMD41_CS_SZ			 1
+
+struct sdhc_softc {
+	struct io_req_queue sc_ioq;
+	uintptr_t sc_int;
+	uint16_t sc_addr;
+	uint32_t sc_emmc_clk;
+};
 
 struct sdhc_cmd_info {
 	enum sdhc_cmd cmd;
 	uint32_t arg;
 	void *resp;
+};
+
+struct sdhc_cid {
+        uint8_t mid;
+        uint16_t oid;
+        uint8_t pnm[5];
+        uint8_t prv;
+        uint32_t psn;
+        uint16_t mdt;
+};
+
+struct sdhc_csd {
+        uint8_t tran_speed;
+        uint8_t dsr;
+        uint16_t c_sz;
+        uint8_t c_sz_mul;
+        uint8_t read_bl_len;
 };
 #endif

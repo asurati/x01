@@ -41,7 +41,6 @@ void mbox_init();
 void fb_init();
 void uart_init();
 void sdhc_init();
-void sd_init();
 
 #ifdef QRPI2
 
@@ -161,7 +160,6 @@ void kmain()
 	sched_thread_create(ticker_thread, NULL);
 
 	sdhc_init();
-	sd_init();
 
 	init_list_head(&wq);
 

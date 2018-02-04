@@ -66,7 +66,6 @@ OBJS += dev/intc.o
 OBJS += dev/mbox.o
 OBJS += dev/uart.o
 OBJS += dev/sdhc.o
-OBJS += dev/sd.o
 ifeq ($(BOARD),QRPI2)
 OBJS += dev/timer_qrpi2.o
 else
