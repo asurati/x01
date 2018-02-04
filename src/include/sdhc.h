@@ -19,17 +19,25 @@
 #define _SDHC_H_
 
 enum sdhc_cmd {
-	SDHC_CMD0 = 0,
-	SDHC_CMD2 = 2,
-	SDHC_CMD3 = 3,
-	SDHC_CMD8 = 8,
-	SDHC_CMD9 = 9,
+	SDHC_CMD0,
+	SDHC_CMD1,
+	SDHC_CMD2,
+	SDHC_CMD3,
+
+	SDHC_CMD7 = 7,
+	SDHC_CMD8,
+	SDHC_CMD9,
+
+	SDHC_CMD17 = 17,
 	SDHC_ACMD41 = 41,
 	SDHC_CMD55 = 55
 };
 
 #define SDHC_CMD3_RCA_POS			16
 #define SDHC_CMD3_RCA_SZ			16
+
+#define SDHC_CMD7_RCA_POS			16
+#define SDHC_CMD7_RCA_SZ			16
 
 #define SDHC_CMD8_PATTERN_POS			 0
 #define SDHC_CMD8_VHS_POS			 8
@@ -44,5 +52,6 @@ enum sdhc_cmd {
 #define SDHC_ACMD41_VDD_32_33_POS		20
 #define SDHC_ACMD41_VDD_32_33_SZ		 1
 
-int	sdhc_send_command(enum sdhc_cmd, uint32_t arg, void *resp);
+int		sdhc_send_command(enum sdhc_cmd, uint32_t arg, void *resp);
+uint32_t	sdhc_read_data();
 #endif

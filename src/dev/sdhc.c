@@ -27,6 +27,8 @@
 #include <sys/ioreq.h>
 #include <sys/sdhc.h>
 
+/* SDHC == SD Host Controller. */
+
 /* Arasan/Broadcom specific SDHC implementation. */
 
 /*
@@ -66,7 +68,8 @@ static int sdhc_hard_irq(void *data)
 		return IRQH_RET_NONE;
 
 	writel(v, io_base + SDHC_INT);
-	irq_sched_raise(IRQ_SCHED_SDHC);
+	if (v & 1)
+		irq_sched_raise(IRQ_SCHED_SDHC);
 	ret = IRQH_RET_HANDLED | IRQH_RET_SCHED;
 	return ret;
 }
@@ -91,7 +94,9 @@ static void sdhc_done_ioctl(struct io_req *ior)
 			p[3] = readl(io_base + SDHC_RESP3);
 			/* fall through. */
 		case SDHC_CMD3:
+		case SDHC_CMD7:
 		case SDHC_CMD8:
+		case SDHC_CMD17:
 		case SDHC_CMD55:
 		case SDHC_ACMD41:
 			p[0] = readl(io_base + SDHC_RESP0);
@@ -131,21 +136,27 @@ static void sdhc_ioctl(struct io_req *ior)
 	switch (ior->io.ioctl.cmd) {
 	case SDHC_IOCTL_COMMAND:
 		writel(ci->arg, io_base + SDHC_ARG1);
-		v = 0;
-		BF_SET(v, SDHC_CMD_IXCHK_EN, 1);
-		BF_SET(v, SDHC_CMD_CRCCHK_EN, 1);
-		BF_SET(v, SDHC_CMD_INDEX, ci->cmd);
+		v  = bits_on(SDHC_CMD_IXCHK_EN);
+		v |= bits_on(SDHC_CMD_CRCCHK_EN);
+		if (ci->cmd == SDHC_CMD17) {
+			v |= bits_on(SDHC_CMD_ISDATA);
+			v |= bits_on(SDHC_TM_DAT_DIR);
+			writel((1 << 16) | (512), io_base + SDHC_BLKSZCNT);
+		}
+		v |= bits_set(SDHC_CMD_INDEX, ci->cmd);
 
 		switch (ci->cmd) {
-		case SDHC_CMD3:
-		case SDHC_CMD8:
-		case SDHC_CMD55:
-		case SDHC_ACMD41:
-			BF_SET(v, SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_48);
-			break;
 		case SDHC_CMD2:
 		case SDHC_CMD9:
-			BF_SET(v, SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_136);
+			v |= bits_set(SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_136);
+			break;
+		case SDHC_CMD3:
+		case SDHC_CMD7:
+		case SDHC_CMD8:
+		case SDHC_CMD17:
+		case SDHC_CMD55:
+		case SDHC_ACMD41:
+			v |= bits_set(SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_48);
 			break;
 		default:
 			break;
@@ -177,6 +188,27 @@ int sdhc_send_command(enum sdhc_cmd cmd, uint32_t arg, void *resp)
 	return 0;
 }
 
+_ctx_proc
+uint32_t sdhc_read_data()
+{
+	return readl(io_base + SDHC_DATA);
+}
+
+int sdhc_go_idle_state()
+{
+	sdhc_send_command(SDHC_CMD0, 0, NULL);
+	return 0;
+}
+
+int sdhc_send_if_condition(int vhs, uint8_t pattern)
+{
+	uint32_t v = 0;
+	v  = bits_set(SDHC_CMD8_PATTERN, pattern);
+	v |= bits_set(SDHC_CMD8_VHS, vhs);
+	sdhc_send_command(SDHC_CMD8, v, NULL);
+	return 0;
+}
+
 /* Turn OFF Interrupts, Clocks, and Power.
  * Reset all.
  * Set the SD Bus clock frequency to 400khz, and enable the clock.
@@ -192,14 +224,13 @@ void sdhc_init()
 
 	/* Support HC versions 2.0 or 3.0. */
 	ver = readl(io_base + SDHC_SLOT_ISR_VER);
-	ver = BF_GET(ver, SDHC_VER_HC);
+	ver = bits_get(ver, SDHC_VER_HC);
 	assert(ver == 1 || ver == 2);
 
 	ioq_init(&sdhc_ioq, sdhc_ioctl, NULL);
 
 	irq_hard_insert(IRQ_HARD_SDHC, sdhc_hard_irq, NULL);
 	irq_sched_insert(IRQ_SCHED_SDHC, sdhc_sched_irq, &sdhc_ioq);
-
 
 	/* Turn off power to the SD Bus. The controller does not expose the
 	 * typical power control register. The corresponding bits are marked
@@ -222,8 +253,7 @@ void sdhc_init()
 	writel(-1, io_base + SDHC_INT);
 
 	/* Reset all. */
-	v = 0;
-	BF_SET(v, SDHC_C1_RESET_ALL, 1);
+	v = bits_on(SDHC_C1_RESET_ALL);
 	writel(v, io_base + SDHC_CNTRL1);
 
 	/* Set the SDCLK freq to <= 400KHz. RPi implements a SDHC 3.0
@@ -231,7 +261,6 @@ void sdhc_init()
 	 * instead of the 8-bit encoded divisor used within SDHC 2.0
 	 * controllers.
 	 */
-	v = 0;
 	clk = mbox_clk_rate_get(MBOX_CLK_EMMC);
 	if (ver == 1) {
 		/* Spec 2.0. */
@@ -240,36 +269,35 @@ void sdhc_init()
 				break;
 		assert((clk >> div) <= SDHC_MIN_FREQ);
 		div = (1 << div) >> 1;
-		BF_SET(v, SDHC_C1_CLKF_LO, div);
+		v = bits_set(SDHC_C1_CLKF_LO, div);
 	} else {
 		/* Spec 3.0. */
 		for (div = 2; div < 2048; div += 2)
 			if (clk / div <= SDHC_MIN_FREQ)
 				break;
-		assert(clk / div <= SDHC_MIN_FREQ);
+		assert(div < 2048);
 		div >>= 1;
-		BF_SET(v, SDHC_C1_CLKF_LO, div);
-		BF_SET(v, SDHC_C1_CLKF_HI, div >> 8);
+		v  = bits_set(SDHC_C1_CLKF_LO, div);
+		v |= bits_set(SDHC_C1_CLKF_HI, div >> 8);
 	}
 
-	BF_SET(v, SDHC_C1_CLK_EN, 1);
+	v |= bits_on(SDHC_C1_CLK_EN);
 	writel(v, io_base + SDHC_CNTRL1);
 
 	/* Wait for internal clock stabilization. */
 	while (1) {
 		v = readl(io_base + SDHC_CNTRL1);
-		if (BF_GET(v, SDHC_C1_CLK_STABLE))
+		if (bits_get(v, SDHC_C1_CLK_STABLE))
 			break;
 	}
 
 	/* Enable clock to the SD Bus. */
-	BF_SET(v, SDHC_C1_SDCLK_EN, 1);
+	v |= bits_on(SDHC_C1_SDCLK_EN);
 	writel(v, io_base + SDHC_CNTRL1);
 
 	/* RPi supports 3v3. Set and enable power. */
-	v = 0;
-	BF_SET(v, SDHC_C0_SDBUS_VOLT, 7);
-	BF_SET(v, SDHC_C0_SDBUS_PWR, 1);
+	v  = bits_set(SDHC_C0_SDBUS_VOLT, 7);
+	v |= bits_on( SDHC_C0_SDBUS_PWR);
 	writel(v, io_base + SDHC_CNTRL0);
 
 	/* Enable and unmask all interrupts. */

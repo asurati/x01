@@ -113,38 +113,50 @@ void sd_init()
 	sdhc_send_command(SDHC_CMD0, 0, NULL);
 
 	/* Send IF Condition. */
-	v = 0;
-	BF_SET(v, SDHC_CMD8_PATTERN, 0xaa);
-	BF_SET(v, SDHC_CMD8_VHS, SDHC_CMD8_VHS_27_36);
+	v  = bits_set(SDHC_CMD8_PATTERN, 0xaa);
+	v |= bits_set(SDHC_CMD8_VHS, SDHC_CMD8_VHS_27_36);
 	sdhc_send_command(SDHC_CMD8, v, resp);
 
 	v = resp[0];
-	assert(BF_GET(v, SDHC_CMD8_PATTERN) == 0xaa);
-	assert(BF_GET(v, SDHC_CMD8_VHS));
+	assert(bits_get(v, SDHC_CMD8_PATTERN) == 0xaa);
+	assert(bits_get(v, SDHC_CMD8_VHS));
 
 	/* Send OP Condition. */
-	v = 0;
 	sdhc_send_command(SDHC_CMD55, 0, resp);
 	/* QRPI2 sends 0x120 as the card status. */
-	BF_SET(v, SDHC_ACMD41_VDD_32_33, 1);
+	v = bits_on(SDHC_ACMD41_VDD_32_33);
 	sdhc_send_command(SDHC_ACMD41, v, resp);
 	/* QRPI2 sends 0x80ffff00 as the OCR. */
-	assert(BF_GET(resp[0], SDHC_ACMD41_VDD_32_33));
+	assert(bits_get(resp[0], SDHC_ACMD41_VDD_32_33));
 
 	/* Send All CID. */
 	sdhc_send_command(SDHC_CMD2, 0, resp);
-	sd_parse_cid(resp);
+	//sd_parse_cid(resp);
 
 	/* Send RCA. */
-	v = 0;
 	sdhc_send_command(SDHC_CMD3, 0, resp);
-
-	addr = BF_GET(resp[0], SDHC_CMD3_RCA);
+	addr = bits_get(resp[0], SDHC_CMD3_RCA);
 	(void)addr;
 
 	/* Send CSD. */
-	v = 0;
-	BF_SET(v, SDHC_CMD9_RCA, addr);
+	v = bits_set(SDHC_CMD9_RCA, addr);
 	sdhc_send_command(SDHC_CMD9, v, resp);
-	sd_parse_csd(resp);
+	//sd_parse_csd(resp);
+
+	/* Select card. */
+	v = bits_set(SDHC_CMD7_RCA, addr);
+	sdhc_send_command(SDHC_CMD7, v, resp);
+	uart_send_num(resp[0]);
+	/* Card Status is 0x700 - standby mode, ready for data. */
+
+	/* Try reading the first block. */
+	sdhc_send_command(SDHC_CMD17, 0, resp);
+	uart_send_num(resp[0]);
+	/* Card Status is 0x900 - transfer mode, ready for data. */
+
+	for (int i = 0; i < 512 / 4; ++i) {
+		v = sdhc_read_data();
+		if (v)
+			uart_send_num(v);
+	}
 }
