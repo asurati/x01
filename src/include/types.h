@@ -40,22 +40,14 @@
 #define ALIGN_UP(v, a)		(((v) + (a) - 1) & ~((a) - 1))
 #define ALIGNED(v, a)		(((v) & ((a) - 1)) == 0)
 
-/* Flag support. */
-#define BF_MASK(f)		((1ull << (f ## _SZ)) - 1)
-/* Shifted mask. */
-#define BF_SMASK(f)		(BF_MASK(f) << f ## _POS)
-#define BF_CLR(v, f)		((v) &= ~BF_SMASK(f))
-
-/* Shifted values. */
-#define BF_GET(v, f)		(((v) >> f ## _POS) & BF_MASK(f))
-#define BF_SET(v, f, w) \
-	do { \
-		(v) |= ((w) & BF_MASK(f)) << f ## _POS; \
-	} while (0)
-
 static inline uintptr_t bits_mask(size_t sz)
 {
 	return (1ull << sz) - 1;
+}
+
+static inline uintptr_t bits_mask_shifted(uintptr_t pos, size_t sz)
+{
+	return bits_mask(sz) << pos;
 }
 
 static inline uintptr_t bits_arrange(uintptr_t pos, size_t sz, uintptr_t val)
@@ -68,6 +60,7 @@ static inline uintptr_t bits_extract(uintptr_t val, uintptr_t pos, size_t sz)
 	return (val >> pos) & bits_mask(sz);
 }
 
+/* With data shifts. */
 #define bits_set(flag, val)	bits_arrange(flag ## _POS, flag ## _SZ, (val))
 #define bits_get(val, flag)	bits_extract(val, flag ## _POS, flag ## _SZ)
 
@@ -77,6 +70,7 @@ static inline uintptr_t bits_extract_nodatashift(uintptr_t val, uintptr_t pos,
 	return val & (bits_mask(sz) << pos);
 }
 
+/* Without data shifts. */
 #define bits_pull(val, flag)						\
 	bits_extract_nodatashift(val, flag ## _POS, flag ## _SZ)
 
@@ -95,13 +89,6 @@ static inline uintptr_t _bits_off(uintptr_t pos, size_t sz)
 
 #define bits_on(flag)	_bits_on(flag ## _POS, flag ## _SZ)
 #define bits_off(flag)	_bits_off(flag ## _POS, flag ## _SZ)
-
-/* Non-shifted values. */
-#define BF_PULL(v, f)		((v) & BF_SMASK(f))
-#define BF_PUSH(v, f, w) \
-	do { \
-		(v) |= BF_PULL(w, f); \
-	} while (0)
 
 #define ARRAY_SIZE(a)		sizeof(a)/sizeof((a)[0])
 
