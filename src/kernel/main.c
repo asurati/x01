@@ -150,8 +150,8 @@ void kmain()
 
 #ifdef QRPI2
 	fb_init();
-	uart_init();
 #endif
+	uart_init();
 
 #ifdef QRPI2
 	(void)display_thread;
