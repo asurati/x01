@@ -37,7 +37,7 @@ static int mbox_irq(void *p)
 	(void)p;
 
 	ret = IRQH_RET_NONE;
-	if (BF_GET(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
+	if (bits_get(readl(&ro->config), MBOX_RO_IRQ_PEND)) {
 		/* Silence the interrupt by reading the RW field. */
 		readl(&ro->rw);
 		irq_sched_raise(IRQ_SCHED_MBOX);
@@ -163,8 +163,7 @@ void mbox_init()
 	/* QRPI2 supports raising interrupts when VC responds to
 	 * ARM's requests.
 	 */
-	v = 0;
-	BF_SET(v, MBOX_RO_IRQ_EN, 1);
+	v = bits_on(MBOX_RO_IRQ_EN);
 	writel(v, &ro->config);
 
 	return;
