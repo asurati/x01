@@ -152,14 +152,12 @@ static void slub_subpage_init1(struct subpage *sp, struct subpage_slab *sl,
 	pg = pm_ram_get_page(pa);
 
 	assert(pg);
-	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
-	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
+	assert(bits_get(pg->flags, PGF_USE) == PGF_USE_SLUB);
+	assert(bits_get(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
 
 	/* Save the log(sz of the allocation unit). */
-	BF_SET(pg->flags, PGF_SLUB_LSIZE, sp->log_sz);
-	t = (uintptr_t)sl;
-	BF_SET(t, SLUB_LEADER, 1);
-	pg->u0.va = (void *)t;
+	pg->flags |= bits_set(PGF_SLUB_LSIZE, sp->log_sz);
+	pg->u0.va  = (void *)((uintptr_t)sl | bits_on(SLUB_LEADER));
 
 	sl->p = va;
 	t = (uintptr_t)sl->p;
@@ -282,7 +280,7 @@ static void *kmalloc_fullpages(struct fullpage *fp)
 	int ret;
 	void *p;
 	struct page *pg;
-	uintptr_t pa, t;
+	uintptr_t pa;
 	struct fullpage_slab *sl;
 
 	/* For now, only allocate single page. We also
@@ -305,18 +303,16 @@ static void *kmalloc_fullpages(struct fullpage *fp)
 	pg = pm_ram_get_page(pa);
 	assert(pg);
 
-	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
+	assert(bits_get(pg->flags, PGF_USE) == PGF_USE_SLUB);
 
 	/* The UNIT value depends on the index of allocation. */
-	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
+	assert(bits_get(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
 
 	/* For multiplage allocations, only the first page has
 	 * the LEADER bit set.
 	 */
-	BF_SET(pg->flags, PGF_SLUB_LSIZE, fp->log_sz);
-	t = (uintptr_t)sl;
-	BF_SET(t, SLUB_LEADER, 1);
-	pg->u0.va = (void *)t;
+	pg->flags |= bits_set(PGF_SLUB_LSIZE, fp->log_sz);
+	pg->u0.va  = (void *)((uintptr_t)sl | bits_on(SLUB_LEADER));
 
 	mutex_lock(&fp->lock);
 	list_add_tail(&sl->entry, &fp->busy);
@@ -433,7 +429,7 @@ void kfree_subpages(void *p, struct subpage *sp, struct page *pg, uintptr_t pa,
 	(void)pa;
 
 	/* subpage allocations occur in PAGE_SIZE pages. */
-	assert(BF_GET(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
+	assert(bits_get(pg->flags, PGF_UNIT) == PM_UNIT_PAGE);
 
 	n = PAGE_SIZE >> sp->log_sz;
 
@@ -474,7 +470,8 @@ void kfree_subpages(void *p, struct subpage *sp, struct page *pg, uintptr_t pa,
 void kfree(void *p)
 {
 	int i;
-	uintptr_t pa, t;
+	void *va;
+	uintptr_t pa;
 	struct page *pg;
 
 	/* The struct page for the pointer p must have SLUB_LEADER set in va,
@@ -484,21 +481,20 @@ void kfree(void *p)
 	assert(pa != 0xffffffff);
 
 	pg = pm_ram_get_page(pa);
-	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
+	assert(bits_get(pg->flags, PGF_USE) == PGF_USE_SLUB);
 
-	t = (uintptr_t)pg->u0.va;
-	assert(BF_GET(t, SLUB_LEADER));
+	va = pg->u0.va;
+	assert(bits_get((uintptr_t)va, SLUB_LEADER));
+	va = (void *)((uintptr_t)va & bits_off(SLUB_LEADER));
 
-	BF_CLR(t, SLUB_LEADER);
-
-	i = BF_GET(pg->flags, PGF_SLUB_LSIZE) - SLUB_SUBPAGE_START;
+	i = bits_get(pg->flags, PGF_SLUB_LSIZE) - SLUB_SUBPAGE_START;
 
 	if (i >= SLUB_SUBPAGE_NSIZES)
 		kfree_fullpages(p, &fullpages[i - SLUB_SUBPAGE_NSIZES], pg, pa,
-				(struct fullpage_slab *)t);
+				(struct fullpage_slab *)va);
 	else
 		kfree_subpages(p, &subpages[i], pg, pa,
-			       (struct subpage_slab *)t);
+			       (struct subpage_slab *)va);
 }
 
 void *mmu_slub_alloc()
@@ -509,7 +505,8 @@ void *mmu_slub_alloc()
 void mmu_slub_free(void *p)
 {
 	int i;
-	uintptr_t pa, t;
+	void *va;
+	uintptr_t pa;
 	struct page *pg;
 	/* The struct page for the pointer p must have SLUB_LEADER set in va,
 	 * and PGF_USE_SLUB set in flags.
@@ -518,16 +515,15 @@ void mmu_slub_free(void *p)
 	assert(pa != 0xffffffff);
 
 	pg = pm_ram_get_page(pa);
-	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
+	assert(bits_get(pg->flags, PGF_USE) == PGF_USE_SLUB);
 
-	t = (uintptr_t)pg->u0.va;
-	assert(BF_GET(t, SLUB_LEADER));
+	va = pg->u0.va;
+	assert(bits_get((uintptr_t)va, SLUB_LEADER));
+	va = (void *)((uintptr_t)va & bits_off(SLUB_LEADER));
 
-	BF_CLR(t, SLUB_LEADER);
-
-	i = BF_GET(pg->flags, PGF_SLUB_LSIZE);
+	i = bits_get(pg->flags, PGF_SLUB_LSIZE);
 	assert(i == 10);
-	kfree_subpages(p, &mmu_pt_subpages, pg, pa, (struct subpage_slab *)t);
+	kfree_subpages(p, &mmu_pt_subpages, pg, pa, (struct subpage_slab *)va);
 }
 
 /* pa must be appropriately aligned.
@@ -537,22 +533,21 @@ void mmu_slub_free(void *p)
 void *mmu_slub_pa_to_va(uintptr_t pa)
 {
 	int i;
-	uintptr_t t;
+	void *va;
 	struct page *pg;
 	const struct subpage_slab *sl;
 
 	pg = pm_ram_get_page(pa);
-	assert(BF_GET(pg->flags, PGF_USE) == PGF_USE_SLUB);
+	assert(bits_get(pg->flags, PGF_USE) == PGF_USE_SLUB);
 
-	t = (uintptr_t)pg->u0.va;
-	assert(BF_GET(t, SLUB_LEADER));
+	va = pg->u0.va;
+	assert(bits_get((uintptr_t)va, SLUB_LEADER));
+	va = (void *)((uintptr_t)va & bits_off(SLUB_LEADER));
 
-	BF_CLR(t, SLUB_LEADER);
-
-	i = BF_GET(pg->flags, PGF_SLUB_LSIZE);
+	i = bits_get(pg->flags, PGF_SLUB_LSIZE);
 	assert(i == 10);
 
-	sl = (const struct subpage_slab *)t;
+	sl = (const struct subpage_slab *)va;
 
 	return sl->p + (pa & PAGE_SIZE_MASK);
 }
