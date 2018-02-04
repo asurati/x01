@@ -76,7 +76,7 @@ endif
 
 QFLAGS := -m 256 -M raspi2 -kernel $(BIN) -serial stdio \
 	  -d int,guest_errors,unimp \
-	  -drive file=img.qcow2,if=sd,format=qcow2 \
+	  -drive file=disk.img,if=sd,format=qcow2 \
 	  -monitor tcp::4444,server,nowait
 
 LDFLAGS := -n -T pi.ld -defsym LOAD_PA=$(LOAD_PA)
