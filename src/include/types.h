@@ -78,10 +78,10 @@ static inline uintptr_t bits_extract_nodatashift(uintptr_t val, uintptr_t pos,
 }
 
 #define bits_pull(val, flag)						\
-	bits_extract_nodatashift(val, flag ## _POS, flag ## _SZ
+	bits_extract_nodatashift(val, flag ## _POS, flag ## _SZ)
 
 #define bits_push(flag, val)						\
-	bits_extract_nodatashift(val, flag ## _POS, flag ## _SZ
+	bits_extract_nodatashift(val, flag ## _POS, flag ## _SZ)
 
 static inline uintptr_t _bits_on(uintptr_t pos, size_t sz)
 {
