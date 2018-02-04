@@ -153,8 +153,12 @@ static void sdhc_ioctl(struct io_req *ior)
 	switch (ior->io.ioctl.cmd) {
 	case SDHC_IOCTL_COMMAND:
 		writel(ci->arg, io_base + SDHC_ARG1);
-		v  = bits_on(SDHC_CMD_IXCHK_EN);
-		v |= bits_on(SDHC_CMD_CRCCHK_EN);
+		v = 0;
+		if (ci->cmd != SDHC_ACMD41 && ci->cmd != SDHC_CMD2 &&
+		    ci->cmd != SDHC_CMD9) {
+			v |= bits_on(SDHC_CMD_IXCHK_EN);
+			v |= bits_on(SDHC_CMD_CRCCHK_EN);
+		}
 		if (ci->cmd == SDHC_CMD17) {
 			v |= bits_on(SDHC_CMD_ISDATA);
 			v |= bits_on(SDHC_TM_DAT_DIR);
@@ -234,28 +238,34 @@ static void sdhc_send_if_condition()
 _ctx_proc
 static void sdhc_send_op_condition()
 {
-	int ret;
+	int i, ret;
 	uint32_t v, card_sts, resp;
 
-	card_sts = 0;
-	ret = sdhc_send_command(SDHC_CMD55, 0, &card_sts);
-	assert(ret == 0);
-	/* QRPI2 sends 0x120 as the card status. */
-	assert(card_sts & (1 << 5));
-	assert(card_sts & (1 << 8));
+	for (i = 0; i < 4; ++i) {
+		card_sts = 0;
+		ret = sdhc_send_command(SDHC_CMD55, 0, &card_sts);
+		assert(ret == 0);
 
-	resp = 0;
-	v = bits_on(SDHC_ACMD41_VDD_32_33);
-	ret = sdhc_send_command(SDHC_ACMD41, v, &resp);
-	assert(ret == 0);
-	/* QRPI2 sends 0x80ffff00 as the OCR. */
-	assert(bits_get(resp, SDHC_ACMD41_VDD_32_33));
-	/* We support only standard capacity cards, SDSC. */
-	assert(bits_get(resp, SDHC_ACMD41_CS) == 0);
+		/* QRPI2 sends 0x120 as the card status. */
+		assert(card_sts & (1 << 5));
+		assert(card_sts & (1 << 8));
+
+		resp = 0;
+		v  = bits_on(SDHC_OCR_VDD_32_33);
+		v |= bits_on(SDHC_OCR_CS);
+		ret = sdhc_send_command(SDHC_ACMD41, v, &resp);
+		assert(ret == 0);
+		msleep(2000);
+
+		/* QRPI2 sends 0x80ffff00 as the OCR. */
+		assert(bits_get(resp, SDHC_OCR_VDD_32_33));
+		if (bits_get(resp, SDHC_OCR_BUSY))
+			break;
+	}
 }
 
 _ctx_proc
-static void sdhc_send_all_cid()
+static void sdhc_send_cid()
 {
 	int ret;
 	uint32_t cid[4];
@@ -349,6 +359,7 @@ static void sdhc_set_sdclock(uint32_t freq)
 
 	/* Wait for internal clock stabilization. */
 	while (1) {
+		msleep(2000);
 		v = readl(io_base + SDHC_CNTRL1);
 		if (bits_get(v, SDHC_C1_CLK_STABLE))
 			break;
@@ -433,7 +444,7 @@ void sdhc_init()
 	sdhc_go_idle_state();
 	sdhc_send_if_condition();
 	sdhc_send_op_condition();
-	sdhc_send_all_cid();
+	sdhc_send_cid();
 	sdhc_send_rca();
 	sdhc_send_csd();
 	sdhc_select_card();
@@ -441,16 +452,44 @@ void sdhc_init()
 }
 
 /*
-   beef0062    8
-   2101dead   40
-   51454d55   72
-   00aa5859  104
+ RPI
 
-   ff926000    8
-   09ffffdf   40
-   5a5f59e0   72
-   00002600  104
-*/
+ MDT 0x00cc
+ Serial 0x04a5c87d
+ Name SU08G
+ OID SD SanDisk
+ MID 03
+
+ SU08G
+ CID
+ c87d00cc
+ 478004a5
+ 53553038
+ 00035344
+
+ CSDv2.0
+ tran_speed = 0x32
+ dsr implemented.
+ c_size = 3b37
+
+ CSD
+ 800a4040    8
+ 003b377f   40
+ 325b5900   72
+ 00400e00  104
+
+  ------------------
+ QRPI2
+ beef0062    8
+ 2101dead   40
+ 51454d55   72
+ 00aa5859  104
+
+ ff926000    8
+ 09ffffdf   40
+ 5a5f59e0   72
+ 00002600  104
+ */
 #if 0
 void sd_parse_csd(const uint32_t resp[4])
 {

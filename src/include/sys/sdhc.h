@@ -38,7 +38,6 @@
 #define SDHC_INT_MASK				(SDHC_BASE + 0x34)
 #define SDHC_INT_EN				(SDHC_BASE + 0x38)
 #define SDHC_CNTRL2				(SDHC_BASE + 0x3c)
-#define SDHC_CAP				(SDHC_BASE + 0x40)
 #define SDHC_SLOT_ISR_VER			(SDHC_BASE + 0xfc)
 
 #define SDHC_BLKSZ_POS				 0
@@ -172,10 +171,13 @@ enum sdhc_cmd {
 #define SDHC_CMD9_RCA_POS			16
 #define SDHC_CMD9_RCA_SZ			16
 
-#define SDHC_ACMD41_VDD_32_33_POS		20
-#define SDHC_ACMD41_CS_POS			30
-#define SDHC_ACMD41_VDD_32_33_SZ		 1
-#define SDHC_ACMD41_CS_SZ			 1
+#define SDHC_OCR_VDD_32_33_POS			20
+#define SDHC_OCR_CS_POS				30
+#define SDHC_OCR_BUSY_POS			31
+#define SDHC_OCR_VDD_32_33_SZ			 1
+#define SDHC_OCR_CS_SZ				 1
+#define SDHC_OCR_BUSY_SZ			 1
+
 
 struct sdhc_softc {
 	struct io_req_queue sc_ioq;
