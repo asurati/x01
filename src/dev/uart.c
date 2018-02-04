@@ -63,14 +63,12 @@ void uart_init()
 	writel(ibrd, io_base + UART_IBRD);
 	writel(fbrd, io_base + UART_IBRD);
 
-	v = 0;
-	BF_SET(v, UART_LCRH_FEN, 1);
-	BF_SET(v, UART_LCRH_WLEN, UART_LCRH_WLEN_8);
+	v  = bits_on(UART_LCRH_FEN);
+	v |= bits_set(UART_LCRH_WLEN, UART_LCRH_WLEN_8);
 	writel(v, io_base + UART_LCRH);
 
-	v = 0;
-	BF_SET(v, UART_CR_EN, 1);
-	//BF_SET(v, UART_CR_TXEN, 1);
+	v = bits_on(UART_CR_EN);
+	//v |= bits_on(UART_CR_TXEN);
 	writel(v, io_base + UART_CR);
 }
 
