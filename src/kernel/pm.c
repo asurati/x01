@@ -124,7 +124,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 		for (va = si[i].start; va < si[i].end; va += PAGE_SIZE) {
 			t = va - kmode_va;
 			t >>= PAGE_SIZE_SZ;
-			BF_SET(ram_map[t].flags, PGF_UNIT, PM_UNIT_PAGE);
+			ram_map[t].flags |= bits_set(PGF_UNIT, PM_UNIT_PAGE);
 			ram_map[t].u0.ref = 1;
 		}
 	}
@@ -132,7 +132,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 	/* There are 256 4KB contigous pages in a 1MB allocation. */
 	t = pa[0] >> PAGE_SIZE_SZ;
 	for (i = 0; i < 256; ++i) {
-		BF_SET(ram_map[t + i].flags, PGF_UNIT, PM_UNIT_SECTION);
+		ram_map[t + i].flags |= bits_set(PGF_UNIT, PM_UNIT_SECTION);
 		ram_map[t + i].u0.ref = 1;
 	}
 
@@ -184,9 +184,8 @@ int pm_ram_alloc(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 		for (j = 0; j < (1 << unit); ++j) {
 			pg = &ram_map[t + j];
 			memset(pg, 0, sizeof(*pg));
-
-			BF_SET(pg->flags, PGF_UNIT, unit);
-			BF_SET(pg->flags, PGF_USE, use);
+			pg->flags |= bits_set(PGF_UNIT, unit);
+			pg->flags |= bits_set(PGF_USE, use);
 			if (use == PGF_USE_NORMAL)
 				ram_map[t + j].u0.ref = 1;
 		}
@@ -224,8 +223,8 @@ int pm_ram_free(enum pm_alloc_units unit, enum pm_page_usage use, int n,
 		 */
 		for (j = 0; j < (1 << unit); ++j) {
 			pg = &ram_map[p + j];
-			assert(BF_GET(pg->flags, PGF_UNIT) == unit);
-			assert(BF_GET(pg->flags, PGF_USE) == use);
+			assert(bits_get(pg->flags, PGF_UNIT) == unit);
+			assert(bits_get(pg->flags, PGF_USE) == use);
 			if (use == PGF_USE_NORMAL)
 				assert(ram_map[p + j].u0.ref == 1);
 		}
