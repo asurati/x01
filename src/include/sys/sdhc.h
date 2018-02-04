@@ -178,7 +178,6 @@ enum sdhc_cmd {
 #define SDHC_OCR_CS_SZ				 1
 #define SDHC_OCR_BUSY_SZ			 1
 
-
 struct sdhc_softc {
 	struct io_req_queue sc_ioq;
 	uintptr_t sc_int;

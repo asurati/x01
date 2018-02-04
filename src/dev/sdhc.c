@@ -255,12 +255,12 @@ static void sdhc_send_op_condition()
 		v |= bits_on(SDHC_OCR_CS);
 		ret = sdhc_send_command(SDHC_ACMD41, v, &resp);
 		assert(ret == 0);
-		msleep(2000);
 
 		/* QRPI2 sends 0x80ffff00 as the OCR. */
 		assert(bits_get(resp, SDHC_OCR_VDD_32_33));
 		if (bits_get(resp, SDHC_OCR_BUSY))
 			break;
+		msleep(2000);
 	}
 }
 
@@ -359,10 +359,10 @@ static void sdhc_set_sdclock(uint32_t freq)
 
 	/* Wait for internal clock stabilization. */
 	while (1) {
-		msleep(2000);
 		v = readl(io_base + SDHC_CNTRL1);
 		if (bits_get(v, SDHC_C1_CLK_STABLE))
 			break;
+		msleep(2000);
 	}
 
 	/* Enable clock to the SD Bus. */
