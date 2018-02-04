@@ -19,12 +19,12 @@
 
 #define INTC_BASE			0xb200
 
-#define INTC_PEND0			(INTC_BASE)
+#define INTC_PEND_BASIC			(INTC_BASE)
 #define INTC_PEND1			(INTC_BASE + 0x4)
 #define INTC_PEND2			(INTC_BASE + 0x8)
-#define INTC_EN_BASIC			(INTC_BASE + 0x18)
 #define INTC_EN1			(INTC_BASE + 0x10)
 #define INTC_EN2			(INTC_BASE + 0x14)
+#define INTC_EN_BASIC			(INTC_BASE + 0x18)
 #define INTC_FIQ			(INTC_BASE + 0xc)
 
 /* STIMER is the System (SoC) Timer, unavailable on QRPI2. */
@@ -52,10 +52,12 @@
 #define INTC_IRQ_STIMER_POS		 3
 #define INTC_IRQ_MBOX_POS		 1
 #define INTC_IRQ_SDHC_POS		30
+#define INTC_IRQ_VC_UART_POS		25
 
 #define INTC_IRQ_STIMER_SZ		 1
 #define INTC_IRQ_MBOX_SZ		 1
 #define INTC_IRQ_SDHC_SZ		 1
+#define INTC_IRQ_VC_UART_SZ		 1
 
 /* On QRPI2, this controller does not manage the Core timers. */
 void intc_init()
@@ -72,6 +74,7 @@ void intc_init()
 
 	v  = readl(io_base + INTC_EN2);
 	v |= bits_on(INTC_IRQ_SDHC);
+	v |= bits_on(INTC_IRQ_VC_UART);
 	writel(v, io_base + INTC_EN2);
 
 #ifdef RPI

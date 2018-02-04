@@ -23,33 +23,31 @@
 #include <slub.h>
 #include <string.h>
 
-#define UART_BASE		0x201000
+#include <sys/uart.h>
 
-#define UART_DR			(UART_BASE)
-#define UART_FR			(UART_BASE + 0x18)
-#define UART_IBRD		(UART_BASE + 0x24)
-#define UART_FBRD		(UART_BASE + 0x28)
-#define UART_LCRH		(UART_BASE + 0x2c)
-#define UART_CR			(UART_BASE + 0x30)
-#define UART_IMSC		(UART_BASE + 0x38)
+static struct uart_softc softc;
 
-#define UART_CR_EN_POS		0
-#define UART_CR_EN_SZ		1
-#define UART_CR_TXEN_POS	8
-#define UART_CR_TXEN_SZ		1
-
-#define UART_LCRH_FEN_POS	4
-#define UART_LCRH_FEN_SZ	1
-#define UART_LCRH_WLEN_POS	5
-#define UART_LCRH_WLEN_SZ	2
-
-#define UART_LCRH_WLEN_8	3
+_ctx_hard
+static int uart_hard_irq(void *p)
+{
+	uint32_t v;
+	(void)p;
+	v = readl(io_base + UART_RIS);
+	if (v)
+		writel(v, io_base + UART_ICR);
+	return 0;
+}
 
 void uart_init()
 {
 	uint32_t clk, ibrd, fbrd, dvdr, v;
 
-	clk = mbox_clk_rate_get(MBOX_CLK_UART);
+	memset(&softc, 0, sizeof(softc));
+
+	irq_hard_insert(IRQ_HARD_UART, uart_hard_irq, &softc);
+
+	softc.sc_uart_clk = clk = mbox_clk_rate_get(MBOX_CLK_UART);
+	//softc.sc_uart_clk = clk = 0x2dc6c0;
 
 	dvdr = 115200 << 4;
 	ibrd = clk / dvdr;
@@ -58,17 +56,24 @@ void uart_init()
 
 	writel(0, io_base + UART_CR);
 	writel(0, io_base + UART_LCRH);
-	writel(0, io_base + UART_IMSC);
 
 	writel(ibrd, io_base + UART_IBRD);
-	writel(fbrd, io_base + UART_IBRD);
+	writel(fbrd, io_base + UART_FBRD);
 
-	v  = bits_on(UART_LCRH_FEN);
-	v |= bits_set(UART_LCRH_WLEN, UART_LCRH_WLEN_8);
+	v = bits_set(UART_LCRH_WLEN, UART_LCRH_WLEN_8);
 	writel(v, io_base + UART_LCRH);
 
+	/* Enable tx interrupt on RPi.
+	 * Avoid enabling on QRPi2, to prevent -d int from filling
+	 * the output.
+	 */
+#ifdef RPI
+	v = bits_set(UART_IMSC_TXIM);
+	writel(v, io_base + UART_IMSC);
+#endif
+
 	v = bits_on(UART_CR_EN);
-	//v |= bits_on(UART_CR_TXEN);
+	v |= bits_on(UART_CR_TXEN);
 	writel(v, io_base + UART_CR);
 }
 

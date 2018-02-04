@@ -23,6 +23,7 @@
 
 enum irq_hard {
 	IRQ_HARD_TIMER,
+	IRQ_HARD_UART,
 	IRQ_HARD_SDHC,
 	IRQ_HARD_MBOX,
 	IRQ_HARD_MAX
@@ -30,6 +31,7 @@ enum irq_hard {
 
 enum irq_soft {
 	IRQ_SOFT_TIMER,
+	IRQ_SOFT_UART,
 	IRQ_SOFT_SDHC,
 	IRQ_SOFT_MBOX,
 	IRQ_SOFT_MAX
@@ -40,6 +42,7 @@ enum irq_soft {
  */
 enum irq_sched {
 	IRQ_SCHED_TIMER,
+	IRQ_SCHED_UART,
 	IRQ_SCHED_SDHC,
 	IRQ_SCHED_MBOX,
 	IRQ_SCHED_SCHEDULE,		/* Should be the last. */
