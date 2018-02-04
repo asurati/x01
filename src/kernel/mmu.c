@@ -121,7 +121,7 @@ void mmu_init()
 	/* Disable the table walk for TTBR0. */
 	asm volatile("mrc	p15, 0, %0, c2, c0, 2\n\t"
 		     : "=r" (v));
-	BF_SET(v, TTBCR_PD0, 1);
+	v |= bits_on(TTBCR_PD0);
 	asm volatile("mcr	p15, 0, %0, c2, c0, 2\n\t"
 		     : : "r" (v));
 
@@ -151,34 +151,33 @@ int mmu_map_sections(const struct mmu_map_req *r)
 		assert(va >= (uintptr_t)r->va_start);
 		assert(pa >= r->pa_start);
 
-		j = BF_GET(va, VA_PDE_IX);
+		j = bits_get(va, VA_PDE_IX);
 
 		/* Ensure that the de are invalid. */
 		for (k = 0; k < n; ++k)
-			assert(BF_GET(pd[j + k], PDE_TYPE0) == 0);
+			assert(bits_get(pd[j + k], PDE_TYPE0) == 0);
 
-		de = 0;
-		BF_SET(de, PDE_TYPE0, 2);		/* S or SS. */
+		de = bits_set(PDE_TYPE0, 2);		/* S or SS. */
 		if (r->mu == MAP_UNIT_SUPER_SECTION) {
-			BF_SET(de, PDE_TYPE1, 1);	/* SS. */
-			BF_PUSH(de, PDE_SS_BASE, pa);
+			de |= bits_on(PDE_TYPE1);	/* SS. */
+			de |= bits_push(PDE_SS_BASE, pa);
 		} else {
-			BF_SET(de, PDE_DOM, r->domain & 0xf);
-			BF_PUSH(de, PDE_S_BASE, pa);
+			de |= bits_set(PDE_DOM, r->domain & 0xf);
+			de |= bits_push(PDE_S_BASE, pa);
 		}
 
 		if (!r->exec)
-			BF_SET(de, PDE_XN, 1);
+			de |= bits_on(PDE_XN);
 		if (r->shared)
-			BF_SET(de, PDE_SHR, 1);
+			de |= bits_on(PDE_SHR);
 		if (!r->global)
-			BF_SET(de, PDE_NG, 1);
+			de |= bits_on(PDE_NG);
 
-		BF_SET(de, PDE_TEX, (r->mt >> 2) & 7);
-		BF_SET(de, PDE_C, (r->mt >> 1) & 1);
-		BF_SET(de, PDE_B, r->mt & 1);
-		BF_SET(de, PDE_APX, (r->ap >> 2) & 1);
-		BF_SET(de, PDE_AP, r->ap & 3);
+		de |= bits_set(PDE_TEX, r->mt >> 2);
+		de |= bits_set(PDE_C, r->mt >> 1);
+		de |= bits_set(PDE_B, r->mt & 1);
+		de |= bits_set(PDE_APX, r->ap >> 2);
+		de |= bits_set(PDE_AP, r->ap & 3);
 
 		for (k = 0; k < n; ++k)
 			pd[j + k] = de;
@@ -208,8 +207,8 @@ int mmu_map_pages(const struct mmu_map_req *r)
 		assert(va >= (uintptr_t)r->va_start);
 		assert(pa >= r->pa_start);
 
-		j = BF_GET(va, VA_PDE_IX);
-		k = BF_GET(pd[j], PDE_TYPE0);
+		j = bits_get(va, VA_PDE_IX);
+		k = bits_get(pd[j], PDE_TYPE0);
 
 		/* The PDE must be either empty or pointing to a PT.
 		 * It must not be busy mapping section/super-section.
@@ -228,9 +227,8 @@ int mmu_map_pages(const struct mmu_map_req *r)
 			memset(pt, 0, 1024);
 			mmu_dcache_clean(pt, 1024);
 
-			de = 0;
-			BF_SET(de, PDE_TYPE0, 1);
-			BF_PUSH(de, PDE_PT_BASE, tpa);
+			de  = bits_set(PDE_TYPE0, 1);
+			de |= bits_push(PDE_PT_BASE, tpa);
 			pd[j] = de;
 			mmu_dcache_clean(&pd[j], sizeof(uintptr_t));
 		} else {
@@ -242,41 +240,40 @@ int mmu_map_pages(const struct mmu_map_req *r)
 				pt += (j - 0x400) * 0x100;
 			} else {
 
-				tpa = BF_PULL(pd[j], PDE_PT_BASE);
+				tpa = bits_pull(pd[j], PDE_PT_BASE);
 				pt = mmu_slub_pa_to_va(tpa);
 			}
 		}
 
-		pt = &pt[BF_GET(va, VA_PTE_IX)];
+		pt = &pt[bits_get(va, VA_PTE_IX)];
 
 		/* Ensure that the PTEs are invalid. */
 		for (k = 0; k < n; ++k)
-			assert(BF_GET(pt[k], PTE_TYPE) == 0);
+			assert(bits_get(pt[k], PTE_TYPE) == 0);
 
-		te = 0;
 		if (r->mu == MAP_UNIT_LARGE_PAGE) {
-			BF_SET(te, PTE_TYPE, 1);
-			BF_PUSH(te, PTE_LP_BASE, pa);
+			te  = bits_set(PTE_TYPE, 1);
+			te |= bits_push(PTE_LP_BASE, pa);
 			if (!r->exec)
-				BF_SET(te, PTE_LP_XN, 1);
-			BF_SET(te, PTE_LP_TEX, (r->mt >> 2) & 7);
+				te |= bits_on(PTE_LP_XN);
+			te |= bits_set(PTE_LP_TEX, r->mt >> 2);
 		} else {
-			BF_SET(te, PTE_TYPE, 2);
-			BF_PUSH(te, PTE_SP_BASE, pa);
+			te  = bits_set(PTE_TYPE, 2);
+			te |= bits_push(PTE_SP_BASE, pa);
 			if (!r->exec)
-				BF_SET(te, PTE_SP_XN, 1);
-			BF_SET(te, PTE_SP_TEX, (r->mt >> 2) & 7);
+				te |= bits_on(PTE_SP_XN);
+			te |= bits_set(PTE_SP_TEX, r->mt >> 2);
 		}
 
 		if (r->shared)
-			BF_SET(te, PTE_SHR, 1);
+			te |= bits_on(PTE_SHR);
 		if (!r->global)
-			BF_SET(te, PTE_NG, 1);
+			te |= bits_on(PTE_NG);
 
-		BF_SET(te, PTE_C, (r->mt >> 1) & 1);
-		BF_SET(te, PTE_B, r->mt & 1);
-		BF_SET(te, PTE_APX, (r->ap >> 2) & 1);
-		BF_SET(te, PTE_AP, r->ap & 3);
+		te |= bits_set(PTE_C, r->mt >> 1);
+		te |= bits_set(PTE_B, r->mt & 1);
+		te |= bits_set(PTE_APX, r->ap >> 2);
+		te |= bits_set(PTE_AP, r->ap & 3);
 
 		for (k = 0; k < n; ++k)
 			pt[k] = te;
@@ -355,7 +352,7 @@ int mmu_unmap(const struct mmu_map_req *r)
 
 			mmu_tlb_invalidate((void *)va, inc);
 
-			j = BF_GET(va, VA_PDE_IX);
+			j = bits_get(va, VA_PDE_IX);
 
 			/* TODO: dec refcount on the frames. */
 
@@ -371,8 +368,8 @@ int mmu_unmap(const struct mmu_map_req *r)
 
 			mmu_tlb_invalidate((void *)va, inc);
 
-			j = BF_GET(va, VA_PDE_IX);
-			k = BF_GET(pd[j], PDE_TYPE0);
+			j = bits_get(va, VA_PDE_IX);
+			k = bits_get(pd[j], PDE_TYPE0);
 
 			/* The PDE must point to a PT. */
 			assert(k == 1);
@@ -380,11 +377,11 @@ int mmu_unmap(const struct mmu_map_req *r)
 				pt = (uintptr_t*)&k_pt_start;
 				pt += (j - 0x400) * 0x100;
 			} else {
-				pa = BF_PULL(pd[j], PDE_PT_BASE);
+				pa = bits_pull(pd[j], PDE_PT_BASE);
 				pt = mmu_slub_pa_to_va(pa);
 			}
 
-			pt = &pt[BF_GET(va, VA_PTE_IX)];
+			pt = &pt[bits_get(va, VA_PTE_IX)];
 
 			/* TODO: dec refcount on the frames. */
 
@@ -411,19 +408,21 @@ uintptr_t mmu_va_to_pa(const void *p)
 
 	va = (uintptr_t)p;
 
-	i = BF_GET(va, VA_PDE_IX);
-	j = BF_GET(pd[i], PDE_TYPE0);
+	i = bits_get(va, VA_PDE_IX);
+	j = bits_get(pd[i], PDE_TYPE0);
 
 	assert(j == 1 || j == 2);
 
 	if (j == 2) {
-		j = BF_GET(pd[i], PDE_TYPE1);
+		j = bits_get(pd[i], PDE_TYPE1);
 		if (j == 0) {
-			pa = BF_PULL(pd[i], PDE_S_BASE);
-			pa += va & ~BF_SMASK(PDE_S_BASE);
+			pa = bits_pull(pd[i], PDE_S_BASE);
+			pa += va & ~bits_mask_shifted(PDE_S_BASE_POS,
+						      PDE_S_BASE_SZ);
 		} else {
-			pa = BF_PULL(pd[i], PDE_SS_BASE);
-			pa += va & ~BF_SMASK(PDE_SS_BASE);
+			pa = bits_pull(pd[i], PDE_SS_BASE);
+			pa += va & ~bits_mask_shifted(PDE_SS_BASE_POS,
+						      PDE_SS_BASE_SZ);
 		}
 		goto exit;
 	}
@@ -433,21 +432,23 @@ uintptr_t mmu_va_to_pa(const void *p)
 		pt += (i - 0x400) * 0x100;
 	} else {
 
-		pa = BF_PULL(pd[i], PDE_PT_BASE);
+		pa = bits_pull(pd[i], PDE_PT_BASE);
 		pt = mmu_slub_pa_to_va(pa);
 	}
 
-	pt = &pt[BF_GET(va, VA_PTE_IX)];
+	pt = &pt[bits_get(va, VA_PTE_IX)];
 
-	j = BF_GET(pt[0], PTE_TYPE);
+	j = bits_get(pt[0], PTE_TYPE);
 	assert(j);
 
 	if (j == 1) {
-		pa = BF_PULL(pt[0], PTE_LP_BASE);
-		pa += va & ~BF_SMASK(PTE_LP_BASE);
+		pa = bits_pull(pt[0], PTE_LP_BASE);
+		pa += va & ~bits_mask_shifted(PTE_LP_BASE_POS,
+					      PTE_LP_BASE_SZ);
 	} else {
-		pa = BF_PULL(pt[0], PTE_SP_BASE);
-		pa += va & (~BF_SMASK(PTE_SP_BASE));
+		pa = bits_pull(pt[0], PTE_SP_BASE);
+		pa += va & ~bits_mask_shifted(PTE_SP_BASE_POS,
+					      PTE_SP_BASE_SZ);
 	}
 exit:
 	lock_sched_unlock(&k_pd_lock);
