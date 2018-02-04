@@ -50,7 +50,7 @@ void vm_init()
 	memset(slabs, 0, sizeof(*slabs));
 
 	slabs->start = &vm_slub_end - (9 << PAGE_SIZE_SZ);;
-	BF_SET(slabs->flags, VSF_NPAGES, 9);
+	slabs->flags |= bits_set(VSF_NPAGES, 9);
 
 	list_add(&slabs->entry, &vm_areas[VMA_SLUB]);
 }
@@ -65,7 +65,7 @@ static const struct vm_seg *vm_find_seg(struct list_head *area,
 
 	list_for_each_rev(e, area) {
 		seg = list_entry(e, struct vm_seg, entry);
-		send = seg->start + BF_PULL(seg->flags, VSF_NPAGES);
+		send = seg->start + bits_pull(seg->flags, VSF_NPAGES);
 		if (seg->start <= start && start < send)
 			return seg;
 		if (seg->start < end && end <= send)
@@ -116,7 +116,7 @@ int vm_alloc(enum vm_area area, enum vm_alloc_units unit, int n,
 		assert(va[i]);
 		seg = kmalloc(sizeof(*seg));
 		seg->start = va[i];
-		BF_SET(seg->flags, VSF_NPAGES, 1u << unit);
+		seg->flags = bits_set(VSF_NPAGES, 1u << unit);
 		list_add(&seg->entry, &vm_areas[area]);
 	}
 	mutex_unlock(&vm_areas_lock[area]);
@@ -143,7 +143,7 @@ int vm_free(enum vm_area area, enum vm_alloc_units unit, int n,
 				continue;
 			if (seg->start != va[i])
 				continue;
-			assert(BF_GET(seg->flags, VSF_NPAGES) ==
+			assert(bits_get(seg->flags, VSF_NPAGES) ==
 			       (1u << unit));
 			list_del(&seg->entry);
 			kfree(seg);
