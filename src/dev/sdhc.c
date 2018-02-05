@@ -330,6 +330,7 @@ static void sdhc_set_sdclock(uint32_t freq)
 	uint32_t clk, ver, v;
 
 	clk = softc.sc_emmc_clk;
+
 	/* Disable the internal clock and the SDCLK. */
 	writel(0, io_base + SDHC_CNTRL1);
 
@@ -345,9 +346,9 @@ static void sdhc_set_sdclock(uint32_t freq)
 		v = bits_set(SDHC_C1_CLKF_LO, div);
 	} else {
 		/* Spec 3.0. */
-		for (div = 2; div < 2048; div += 2)
-			if (clk / div <= freq)
-				break;
+		div = clk / freq;
+		if (div & 1)
+			++div;
 		assert(div < 2048);
 		div >>= 1;
 		v  = bits_set(SDHC_C1_CLKF_LO, div);

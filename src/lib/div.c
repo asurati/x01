@@ -17,6 +17,7 @@
 
 #include <div.h>
 
+#if 0
 unsigned int __aeabi_uidiv(unsigned int dvd, unsigned int dvsr)
 {
 	unsigned int q;
@@ -29,3 +30,4 @@ unsigned int __aeabi_uidiv(unsigned int dvd, unsigned int dvsr)
 	}
 	return q;
 }
+#endif
