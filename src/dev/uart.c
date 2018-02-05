@@ -32,6 +32,7 @@ static int uart_hard_irq(void *p)
 {
 	uint32_t v;
 	(void)p;
+
 	v = readl(io_base + UART_RIS);
 	if (v)
 		writel(v, io_base + UART_ICR);
@@ -47,7 +48,6 @@ void uart_init()
 	irq_hard_insert(IRQ_HARD_UART, uart_hard_irq, &softc);
 
 	softc.sc_uart_clk = clk = mbox_clk_rate_get(MBOX_CLK_UART);
-	//softc.sc_uart_clk = clk = 0x2dc6c0;
 
 	dvdr = 115200 << 4;
 	ibrd = clk / dvdr;
@@ -68,7 +68,7 @@ void uart_init()
 	 * the output.
 	 */
 #ifdef RPI
-	v = bits_set(UART_IMSC_TXIM);
+	v = bits_on(UART_IMSC_TXIM);
 	writel(v, io_base + UART_IMSC);
 #endif
 
