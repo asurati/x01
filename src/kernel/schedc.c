@@ -382,7 +382,6 @@ static int sched_timer_wakeup(void *data)
 {
 	struct timer *t;
 	t = data;
-	t->cond = 1;
 	wake_up_preempt_disabled(&t->wq);
 	return 0;
 }
@@ -406,7 +405,6 @@ void msleep(int ms)
 	assert(ticks <= SCHED_MAX_TOUT_TICKS);
 
 	init_list_head(&t.wq);
-	t.cond = 0;
 	t.fn = sched_timer_wakeup;
 	t.data = &t;
 
@@ -425,7 +423,7 @@ void msleep(int ms)
 	/* The wakeup could arrive in between the queuing of the timer,
 	 * and going for a wait. wait_event() handles the situation.
 	 */
-	wait_event(&t.wq, t.cond == 1);
+	wait(&t.wq);
 }
 
 _ctx_init

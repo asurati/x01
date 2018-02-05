@@ -42,7 +42,6 @@ struct timer {
 	timer_fn fn;
 	void *data;
 	struct list_head wq;
-	int cond;
 };
 
 /* Should we add barrier here? */
