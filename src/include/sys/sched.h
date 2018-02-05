@@ -53,4 +53,5 @@ struct timer {
 
 void		sched_timer_tick_soft();
 void		sched_switch();
+void		wake_up_preempt_disabled(struct list_head *wq);
 #endif

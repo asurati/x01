@@ -212,7 +212,7 @@ int schedule()
 }
 
 _ctx_sched
-static void wake_up_preempt_disabled(struct list_head *wq)
+void wake_up_preempt_disabled(struct list_head *wq)
 {
 	int queue_sched_irq;
 	struct list_head *e;
@@ -250,7 +250,7 @@ static void wake_up_preempt_disabled(struct list_head *wq)
 _ctx_proc
 void wake_up(struct list_head *wq)
 {
-	preempt_disable();
+	assert(preempt_disable() == 1);
 	wake_up_preempt_disabled(wq);
 	preempt_enable();
 }

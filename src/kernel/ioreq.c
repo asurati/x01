@@ -19,6 +19,7 @@
 #include <ioreq.h>
 #include <slub.h>
 
+#include <sys/sched.h>
 #include <sys/ioreq.h>
 #include <sys/work.h>
 
@@ -99,7 +100,7 @@ void ioq_ior_done_sched(struct io_req_queue *ioq, struct io_req *ior)
 	if (ior->async)
 		wq_work_add(ioq->ioc_wq, &ior->ioc.ioc_work);
 	else
-		wake_up(&ior->ioc.ioc_wait);
+		wake_up_preempt_disabled(&ior->ioc.ioc_wait);
 
 	ior = ioq_ior_next(ioq);
 	ioq_ior_run(ioq, ior);
