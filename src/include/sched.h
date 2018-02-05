@@ -106,6 +106,15 @@ static inline void irq_sched_enable()
 #define preempt_disable()		irq_sched_disable()
 #define preempt_enable()		irq_sched_enable()
 
+#define wait(wq)							\
+	do {								\
+		preempt_disable();					\
+		set_current_state(THRD_STATE_WAITING);			\
+		list_add_tail(&current->entry, (wq));			\
+		preempt_enable();					\
+		schedule();						\
+	} while (0)
+
 #define wait_event(wq, cond)						\
 	do {								\
 		preempt_disable();					\
