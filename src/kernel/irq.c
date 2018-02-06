@@ -34,23 +34,14 @@ static uint32_t irq_sched_mask;
 _ctx_sched
 int irq_sched()
 {
-	int i, ret, ctx_change;
+	int i;
 	uint32_t mask;
 
-	ctx_change = 0;
 	while (1) {
-		/* Do not process if we are waking up from a schedule()
-		 * switch.
-		 */
-		if (ctx_change)
-			break;
-
 		/* Disabling soft IRQs is not necessary since the function
 		 * is called from the primary IRQ context which ensures that
 		 * no soft IRQs can run and modify the mask while the primary
 		 * context itself is running.
-		 *
-		 * irq_sched() is called from the primary IRQ context.
 		 */
 
 		mask = *(volatile uint32_t *)&irq_sched_mask;
@@ -60,19 +51,17 @@ int irq_sched()
 			break;
 
 		for (i = 0; i < IRQ_SCHED_MAX && mask; ++i, mask >>= 1)
-			if ((mask & 1) && irqs_sched[i].fn) {
-				ret = irqs_sched[i].fn(irqs_sched[i].data);
-				if (i != IRQ_SCHED_SCHEDULE)
-					continue;
-				if (ret != SCHED_RET_SWITCH)
-					continue;
-				/* We are waking up from a schedule() which was
-				 * triggered possibly due to quota consumption.
-				 * Return immediately.
-				 */
-				ctx_change = 1;
-				break;
-			}
+			if ((mask & 1) && irqs_sched[i].fn)
+				irqs_sched[i].fn(irqs_sched[i].data);
+
+		/* When i == IRQ_SCHED_SCHEDULE, we are waking
+		 * up from a schedule() which was
+		 * triggered possibly due to quota consumption.
+		 * Re-read the mask. The fact that
+		 * IRQ_SCHED_SCHEDULE is processed in the end,
+		 * no extra checks are needed to force the
+		 * re-read.
+		 */
 	}
 	return 0;
 }
