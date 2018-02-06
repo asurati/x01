@@ -365,6 +365,10 @@ static void sdhc_set_bus_width()
 	card_sts = 0;
 	ret = sdhc_send_command(SDHC_ACMD6, SDHC_ACMD6_BUSW_4, &card_sts);
 	assert(ret == 0);
+
+	v  = readl(io_base + SDHC_CNTRL0);
+	v |= bits_on(SDHC_C0_4BIT);
+	writel(v, io_base + SDHC_CNTRL0);
 }
 
 _ctx_proc
