@@ -99,7 +99,9 @@ static void sdhc_done_ioctl(struct io_req *ior)
 		case SDHC_CMD8:
 		case SDHC_CMD17:
 		case SDHC_CMD55:
+		case SDHC_ACMD6:
 		case SDHC_ACMD41:
+		case SDHC_ACMD42:
 		case SDHC_ACMD51:
 			p[0] = readl(io_base + SDHC_RESP0);
 			break;
@@ -193,7 +195,9 @@ static void sdhc_ioctl(struct io_req *ior)
 		case SDHC_CMD8:
 		case SDHC_CMD17:
 		case SDHC_CMD55:
+		case SDHC_ACMD6:
 		case SDHC_ACMD41:
+		case SDHC_ACMD42:
 		case SDHC_ACMD51:
 			v |= bits_set(SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_48);
 			break;
@@ -322,11 +326,45 @@ static void sdhc_send_scr()
 	assert(ret == 0);
 	/* QRPI2 sends 0x920 as the card status. */
 
+	card_sts = 0;
 	ret = sdhc_send_command(SDHC_ACMD51, 0, &card_sts);
 	assert(ret == 0);
 	/* QRPI2 sends 0x920 as the card status. */
 	for (ret = 0; ret < 2; ++ret)
 		v = readl(io_base + SDHC_DATA);
+}
+
+_ctx_proc
+static void sdhc_clear_card_detect()
+{
+	int ret;
+	uint32_t card_sts, v;
+
+	card_sts = 0;
+	v = bits_set(SDHC_CMD55_RCA, softc.sc_addr);
+	ret = sdhc_send_command(SDHC_CMD55, v, &card_sts);
+	assert(ret == 0);
+
+	card_sts = 0;
+	ret = sdhc_send_command(SDHC_ACMD42, 0, &card_sts);
+	assert(ret == 0);
+}
+
+_ctx_proc
+static void sdhc_set_bus_width()
+{
+	int ret;
+	uint32_t card_sts, v;
+
+	card_sts = 0;
+	v = bits_set(SDHC_CMD55_RCA, softc.sc_addr);
+	ret = sdhc_send_command(SDHC_CMD55, v, &card_sts);
+	assert(ret == 0);
+
+	/* Assuming that the SCR shows 4-bit width support as available. */
+	card_sts = 0;
+	ret = sdhc_send_command(SDHC_ACMD6, SDHC_ACMD6_BUSW_4, &card_sts);
+	assert(ret == 0);
 }
 
 _ctx_proc
@@ -484,6 +522,9 @@ void sdhc_init()
 	sdhc_send_csd();
 	sdhc_select_card();
 	sdhc_send_scr();
+	sdhc_clear_card_detect();
+	sdhc_set_bus_width();
+	sdhc_set_sdclock(SDHC_SDR12_FREQ);
 	(void)sdhc_read_block;
 }
 

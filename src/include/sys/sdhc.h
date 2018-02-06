@@ -138,6 +138,7 @@
 #define SDHC_IOCTL_COMMAND			 1
 
 #define SDHC_MIN_FREQ			    400000
+#define SDHC_SDR12_FREQ			  25000000
 #define SDHC_BLK_SIZE			       512
 
 enum sdhc_cmd {
@@ -146,18 +147,22 @@ enum sdhc_cmd {
 	SDHC_CMD2,
 	SDHC_CMD3,
 
+	SDHC_ACMD6 = 6,
 	SDHC_CMD7 = 7,
 	SDHC_CMD8,
 	SDHC_CMD9,
 
 	SDHC_CMD17 = 17,
 	SDHC_ACMD41 = 41,
+	SDHC_ACMD42,
 	SDHC_ACMD51 = 51,
 	SDHC_CMD55 = 55
 };
 
 #define SDHC_CMD3_RCA_POS			16
 #define SDHC_CMD3_RCA_SZ			16
+
+#define SDHC_ACMD6_BUSW_4			 2
 
 #define SDHC_CMD7_RCA_POS			SDHC_CMD3_RCA_POS
 #define SDHC_CMD7_RCA_SZ			SDHC_CMD3_RCA_SZ
