@@ -100,6 +100,7 @@ static void sdhc_done_ioctl(struct io_req *ior)
 		case SDHC_CMD17:
 		case SDHC_CMD55:
 		case SDHC_ACMD41:
+		case SDHC_ACMD51:
 			p[0] = readl(io_base + SDHC_RESP0);
 			break;
 		default:
@@ -153,12 +154,24 @@ static void sdhc_ioctl(struct io_req *ior)
 	switch (ior->io.ioctl.cmd) {
 	case SDHC_IOCTL_COMMAND:
 		writel(ci->arg, io_base + SDHC_ARG1);
+
 		v = 0;
+
 		if (ci->cmd != SDHC_ACMD41 && ci->cmd != SDHC_CMD2 &&
 		    ci->cmd != SDHC_CMD9) {
 			v |= bits_on(SDHC_CMD_IXCHK_EN);
 			v |= bits_on(SDHC_CMD_CRCCHK_EN);
 		}
+
+		if (ci->cmd == SDHC_ACMD51) {
+			v |= bits_on(SDHC_CMD_ISDATA);
+			v |= bits_on(SDHC_TM_DAT_DIR);
+
+			sz  = bits_set(SDHC_BLKSZ, 8);
+			sz |= bits_set(SDHC_BLKCNT, 1);
+			writel(sz, io_base + SDHC_BLKSZCNT);
+		}
+
 		if (ci->cmd == SDHC_CMD17) {
 			v |= bits_on(SDHC_CMD_ISDATA);
 			v |= bits_on(SDHC_TM_DAT_DIR);
@@ -167,6 +180,7 @@ static void sdhc_ioctl(struct io_req *ior)
 			sz |= bits_set(SDHC_BLKCNT, 1);
 			writel(sz, io_base + SDHC_BLKSZCNT);
 		}
+
 		v |= bits_set(SDHC_CMD_INDEX, ci->cmd);
 
 		switch (ci->cmd) {
@@ -180,6 +194,7 @@ static void sdhc_ioctl(struct io_req *ior)
 		case SDHC_CMD17:
 		case SDHC_CMD55:
 		case SDHC_ACMD41:
+		case SDHC_ACMD51:
 			v |= bits_set(SDHC_CMD_RESP_TYPE, SDHC_CMD_RESP_48);
 			break;
 		default:
@@ -293,6 +308,25 @@ static void sdhc_send_csd()
 	v = bits_set(SDHC_CMD9_RCA, softc.sc_addr);
 	ret = sdhc_send_command(SDHC_CMD9, v, csd);
 	assert(ret == 0);
+}
+
+_ctx_proc
+static void sdhc_send_scr()
+{
+	int ret;
+	uint32_t card_sts, v;
+
+	card_sts = 0;
+	v = bits_set(SDHC_CMD55_RCA, softc.sc_addr);
+	ret = sdhc_send_command(SDHC_CMD55, v, &card_sts);
+	assert(ret == 0);
+	/* QRPI2 sends 0x920 as the card status. */
+
+	ret = sdhc_send_command(SDHC_ACMD51, 0, &card_sts);
+	assert(ret == 0);
+	/* QRPI2 sends 0x920 as the card status. */
+	for (ret = 0; ret < 2; ++ret)
+		v = readl(io_base + SDHC_DATA);
 }
 
 _ctx_proc
@@ -449,6 +483,7 @@ void sdhc_init()
 	sdhc_send_rca();
 	sdhc_send_csd();
 	sdhc_select_card();
+	sdhc_send_scr();
 	(void)sdhc_read_block;
 }
 
