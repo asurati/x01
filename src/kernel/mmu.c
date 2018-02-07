@@ -172,8 +172,8 @@ int mmu_map_sections(const struct mmu_map_req *r)
 			de |= bits_on(PDE_SHR);
 		if (bits_get(r->flags, MMR_NG))
 			de |= bits_on(PDE_NG);
-		if (bits_get(r->flags, MMR_AB))
-			de |= bits_on(PDE_AB);
+		if (bits_get(r->flags, MMR_AF))
+			de |= bits_on(PDE_AF);
 
 		de |= bits_set(PDE_TEX, r->mt >> 2);
 		de |= bits_set(PDE_C, r->mt >> 1);
@@ -271,8 +271,8 @@ int mmu_map_pages(const struct mmu_map_req *r)
 			te |= bits_on(PTE_SHR);
 		if (bits_get(r->flags, MMR_NG))
 			te |= bits_on(PTE_NG);
-		if (bits_get(r->flags, MMR_AB))
-			te |= bits_on(PTE_AB);
+		if (bits_get(r->flags, MMR_AF))
+			te |= bits_on(PTE_AF);
 
 		te |= bits_set(PTE_C, r->mt >> 1);
 		te |= bits_set(PTE_B, r->mt);

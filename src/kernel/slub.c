@@ -130,7 +130,7 @@ static void slub_map(void *va, uintptr_t pa)
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_PAGE;
 	r.flags  = bits_on(MMR_XN);
-	r.flags |= bits_on(MMR_AB);	/* Prevent access faults. */
+	r.flags |= bits_on(MMR_AF);	/* Prevent access faults. */
 	r.va_start = va;
 	r.pa_start = pa;
 

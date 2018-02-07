@@ -103,7 +103,7 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_SECTION;
 	r.flags  = bits_on(MMR_XN);
-	r.flags |= bits_on(MMR_AB);	/* Prevent access faults on ram_map. */
+	r.flags |= bits_on(MMR_AF);	/* Prevent access faults on ram_map. */
 
 	ret = mmu_map(&r);
 	assert(ret == 0);

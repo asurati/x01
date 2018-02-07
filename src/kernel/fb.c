@@ -63,7 +63,7 @@ void fb_init()
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_SECTION;
 	r.flags  = bits_on(MMR_XN);
-	r.flags |= bits_on(MMR_AB);	/* Prevent access faults. */
+	r.flags |= bits_on(MMR_AF);	/* Prevent access faults. */
 
 	ret = mmu_map(&r);
 	assert(ret == 0);

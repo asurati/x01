@@ -146,12 +146,12 @@ enum mmu_map_unit {
 #define MMR_XN_POS				0
 #define MMR_NG_POS				1
 #define MMR_SHR_POS				2
-#define MMR_AB_POS				3
+#define MMR_AF_POS				3
 #define MMR_DOM_POS				4
 #define MMR_XN_SZ				1
 #define MMR_NG_SZ				1
 #define MMR_SHR_SZ				1
-#define MMR_AB_SZ				1
+#define MMR_AF_SZ				1
 #define MMR_DOM_SZ				4
 
 struct mmu_map_req {

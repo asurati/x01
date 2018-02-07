@@ -97,7 +97,7 @@ void excpt_init()
 	r.mt = MT_NRM_IO_WBA;
 	r.ap = AP_SRO;
 	r.mu = MAP_UNIT_PAGE;
-	r.flags = bits_on(MMR_AB);	/* Prevent access faults. */
+	r.flags = bits_on(MMR_AF);	/* Prevent access faults. */
 
 	ret = mmu_map(&r);
 	assert(ret == 0);
