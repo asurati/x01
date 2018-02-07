@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/* Assumption: Caches and MMU disabled at entry. */
 .globl start
 start:
 	/* Disable IRQs and FIQs. Enter SVC mode. */
@@ -26,10 +27,14 @@ start:
 	mov	r0, r2
 	bl	boot_copy_atag_mem
 
+	mov	r0, #0
+
+	/* Invalidate all unlocked TLBs before Force AP is set to 1. */
+	mcr	p15, 0, r0, c8, c5, 0
+
 	/* Invalidate ICache, as recommended in the TRM.
 	 *  Do we need dsb() here?
 	 */
-	mov	r0, #0
 	mcr	p15, 0, r0, c7, c5, 0
 
 	/* Restrict ICache and DCache to 16KB each. Avoids page colouring. */
