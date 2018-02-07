@@ -70,6 +70,7 @@ start:
 	orr	r0, r0, #(1 << 12)		@ I  ICache
 	orr	r0, r0, #(1 << 13)		@ V  High Vectors
 	orr	r0, r0, #(1 << 23)		@ XP Subpage AP disabled
+	orr	r0, r0, #(1 << 29)		@ FA Force AP
 	mcr	p15, 0, r0, c1, c0, 0
 
 	bl	_dsb

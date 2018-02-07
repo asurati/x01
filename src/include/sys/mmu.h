@@ -28,7 +28,8 @@ extern const uintptr_t kmode_va;
 #define PDE_C_POS		 3
 #define PDE_XN_POS		 4
 #define PDE_DOM_POS		 5
-#define PDE_AP_POS		10
+#define PDE_AB_POS		10
+#define PDE_AP_POS		11
 #define PDE_TEX_POS		12
 #define PDE_APX_POS		15
 #define PDE_SHR_POS		16
@@ -45,7 +46,8 @@ extern const uintptr_t kmode_va;
 #define PDE_C_SZ		 1
 #define PDE_XN_SZ		 1
 #define PDE_DOM_SZ		 4
-#define PDE_AP_SZ		 2
+#define PDE_AB_SZ		 1
+#define PDE_AP_SZ		 1
 #define PDE_TEX_SZ		 3
 #define PDE_APX_SZ		 1
 #define PDE_SHR_SZ		 1
@@ -62,7 +64,8 @@ extern const uintptr_t kmode_va;
 #define PTE_TYPE_POS		 0
 #define PTE_B_POS		 2
 #define PTE_C_POS		 3
-#define PTE_AP_POS		 4
+#define PTE_AB_POS		 4
+#define PTE_AP_POS		 5
 #define PTE_SP_TEX_POS		 6
 #define PTE_LP_TEX_POS		12
 #define PTE_APX_POS		 9
@@ -76,7 +79,8 @@ extern const uintptr_t kmode_va;
 #define PTE_TYPE_SZ		 2
 #define PTE_B_SZ		 1
 #define PTE_C_SZ		 1
-#define PTE_AP_SZ		 2
+#define PTE_AB_SZ		 1
+#define PTE_AP_SZ		 1
 #define PTE_SP_TEX_SZ		 3
 #define PTE_LP_TEX_SZ		 3
 #define PTE_APX_SZ		 1

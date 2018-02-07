@@ -127,14 +127,11 @@ enum mmu_mem_type {
 };
 
 enum mmu_access_perm {
-			/* APX AP */
-        AP_NA0,		/*   0 00 */
-        AP_SRW,		/*   0 01 */
-        AP_SRW_URO,	/*   0 10 */
-        AP_FULL,	/*   0 11 */
-        AP_NA1,		/*   1 00 */
-        AP_SRO,		/*   1 01 */
-        AP_SRO_URO,	/*   1 10 */
+			/* APX AP[1] */
+        AP_SRW,		/*   0   0 */
+        AP_SRW_URW,	/*   0   1 */
+        AP_SRO,		/*   1   0 */
+        AP_SRO_URO,	/*   1   1 */
 	AP_MAX
 };
 

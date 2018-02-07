@@ -71,7 +71,7 @@ void boot_map()
 	for (i = 0; i < 4; ++i) {
 		de  = bits_set(PDE_TYPE0, 2);	/* Section. */
 		de |= bits_set(PDE_S_BASE, i);	/* Base. */
-		de |= bits_set(PDE_AP, 1);	/* Supervisor-only, RW. */
+		de |= bits_set(PDE_AB, 1);	/* SRW, Accessed. */
 		de |= bits_on(PDE_C);		/* I/O WB, AoW. */
 		de |= bits_on(PDE_B);		/* I/O WB, AoW. */
 		de |= bits_set(PDE_TEX, 1);
@@ -98,7 +98,7 @@ void boot_map()
 			c = si[i].desc;
 
 			te  = bits_set(PTE_TYPE, 2);	/* Small Page. */
-			te |= bits_set(PTE_AP, 1);	/* Supervisor-only. */
+			te |= bits_set(PTE_AB, 1);	/* SRW, Accessed. */
 
 			/* no execute. */
 			if ((c & 1) == 0)

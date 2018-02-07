@@ -175,9 +175,9 @@ int mmu_map_sections(const struct mmu_map_req *r)
 
 		de |= bits_set(PDE_TEX, r->mt >> 2);
 		de |= bits_set(PDE_C, r->mt >> 1);
-		de |= bits_set(PDE_B, r->mt & 1);
-		de |= bits_set(PDE_APX, r->ap >> 2);
-		de |= bits_set(PDE_AP, r->ap & 3);
+		de |= bits_set(PDE_B, r->mt);
+		de |= bits_set(PDE_APX, r->ap >> 1);
+		de |= bits_set(PDE_AP, r->ap);
 
 		for (k = 0; k < n; ++k)
 			pd[j + k] = de;
@@ -271,9 +271,9 @@ int mmu_map_pages(const struct mmu_map_req *r)
 			te |= bits_on(PTE_NG);
 
 		te |= bits_set(PTE_C, r->mt >> 1);
-		te |= bits_set(PTE_B, r->mt & 1);
-		te |= bits_set(PTE_APX, r->ap >> 2);
-		te |= bits_set(PTE_AP, r->ap & 3);
+		te |= bits_set(PTE_B, r->mt);
+		te |= bits_set(PTE_APX, r->ap >> 1);
+		te |= bits_set(PTE_AP, r->ap);
 
 		for (k = 0; k < n; ++k)
 			pt[k] = te;
