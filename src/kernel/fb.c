@@ -62,10 +62,8 @@ void fb_init()
 	r.mt = MT_NRM_IO_NC;		/* Write Combining on armv6. */
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_SECTION;
-	r.exec = 0;
-	r.global = 1;
-	r.shared = 0;
-	r.domain = 0;
+	r.flags  = bits_on(MMR_XN);
+	r.flags |= bits_on(MMR_AB);	/* Prevent access faults. */
 
 	ret = mmu_map(&r);
 	assert(ret == 0);

@@ -162,16 +162,18 @@ int mmu_map_sections(const struct mmu_map_req *r)
 			de |= bits_on(PDE_TYPE1);	/* SS. */
 			de |= bits_push(PDE_SS_BASE, pa);
 		} else {
-			de |= bits_set(PDE_DOM, r->domain & 0xf);
+			de |= bits_set(PDE_DOM, bits_get(r->flags, MMR_DOM));
 			de |= bits_push(PDE_S_BASE, pa);
 		}
 
-		if (!r->exec)
+		if (bits_get(r->flags, MMR_XN))
 			de |= bits_on(PDE_XN);
-		if (r->shared)
+		if (bits_get(r->flags, MMR_SHR))
 			de |= bits_on(PDE_SHR);
-		if (!r->global)
+		if (bits_get(r->flags, MMR_NG))
 			de |= bits_on(PDE_NG);
+		if (bits_get(r->flags, MMR_AB))
+			de |= bits_on(PDE_AB);
 
 		de |= bits_set(PDE_TEX, r->mt >> 2);
 		de |= bits_set(PDE_C, r->mt >> 1);
@@ -254,21 +256,23 @@ int mmu_map_pages(const struct mmu_map_req *r)
 		if (r->mu == MAP_UNIT_LARGE_PAGE) {
 			te  = bits_set(PTE_TYPE, 1);
 			te |= bits_push(PTE_LP_BASE, pa);
-			if (!r->exec)
+			if (bits_get(r->flags, MMR_XN))
 				te |= bits_on(PTE_LP_XN);
 			te |= bits_set(PTE_LP_TEX, r->mt >> 2);
 		} else {
 			te  = bits_set(PTE_TYPE, 2);
 			te |= bits_push(PTE_SP_BASE, pa);
-			if (!r->exec)
+			if (bits_get(r->flags, MMR_XN))
 				te |= bits_on(PTE_SP_XN);
 			te |= bits_set(PTE_SP_TEX, r->mt >> 2);
 		}
 
-		if (r->shared)
+		if (bits_get(r->flags, MMR_SHR))
 			te |= bits_on(PTE_SHR);
-		if (!r->global)
+		if (bits_get(r->flags, MMR_NG))
 			te |= bits_on(PTE_NG);
+		if (bits_get(r->flags, MMR_AB))
+			te |= bits_on(PTE_AB);
 
 		te |= bits_set(PTE_C, r->mt >> 1);
 		te |= bits_set(PTE_B, r->mt);

@@ -129,10 +129,8 @@ static void slub_map(void *va, uintptr_t pa)
 	r.mt = MT_NRM_IO_WBA;
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_PAGE;
-	r.exec = 0;
-	r.global = 1;
-	r.shared = 0;
-	r.domain = 0;
+	r.flags  = bits_on(MMR_XN);
+	r.flags |= bits_on(MMR_AB);	/* Prevent access faults. */
 	r.va_start = va;
 	r.pa_start = pa;
 

@@ -102,10 +102,9 @@ void pm_init(uint32_t ram, uint32_t _ramsz)
 	r.mt = MT_NRM_IO_WBA;
 	r.ap = AP_SRW;
 	r.mu = MAP_UNIT_SECTION;
-	r.exec = 0;
-	r.global = 1;
-	r.shared = 0;
-	r.domain = 0;
+	r.flags  = bits_on(MMR_XN);
+	r.flags |= bits_on(MMR_AB);	/* Prevent access faults on ram_map. */
+
 	ret = mmu_map(&r);
 	assert(ret == 0);
 

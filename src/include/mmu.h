@@ -143,6 +143,17 @@ enum mmu_map_unit {
 	MAP_UNIT_MAX
 };
 
+#define MMR_XN_POS				0
+#define MMR_NG_POS				1
+#define MMR_SHR_POS				2
+#define MMR_AB_POS				3
+#define MMR_DOM_POS				4
+#define MMR_XN_SZ				1
+#define MMR_NG_SZ				1
+#define MMR_SHR_SZ				1
+#define MMR_AB_SZ				1
+#define MMR_DOM_SZ				4
+
 struct mmu_map_req {
 	int n;
 	void *va_start;
@@ -150,10 +161,7 @@ struct mmu_map_req {
 	enum mmu_mem_type mt;
 	enum mmu_access_perm ap;
 	enum mmu_map_unit mu;
-	char exec;
-	char global;
-	char shared;
-	char domain;
+	uint32_t flags;
 };
 
 void		mmu_tlb_invalidate(void *va, size_t sz);
