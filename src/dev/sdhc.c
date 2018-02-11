@@ -277,8 +277,11 @@ static void sdhc_send_op_condition()
 
 		/* QRPI2 sends 0x80ffff00 as the OCR. */
 		assert(bits_get(resp, SDHC_OCR_VDD_32_33));
-		if (bits_get(resp, SDHC_OCR_BUSY))
+		if (bits_get(resp, SDHC_OCR_BUSY)) {
+			/* Assume a high capacity card. */
+			assert(bits_get(resp, SDHC_OCR_CS));
 			break;
+		}
 		msleep(2000);
 	}
 }
@@ -384,18 +387,18 @@ static void sdhc_select_card()
 }
 
 _ctx_proc
-static void sdhc_read_block(void *buf)
+static void sdhc_read_block(uint32_t addr, void *buf)
 {
 	int ret, i;
 	uint32_t resp;
 	uint32_t *p;
 
-	ret = sdhc_send_command(SDHC_CMD17, 0, &resp);
+	ret = sdhc_send_command(SDHC_CMD17, addr, &resp);
 	assert(ret == 0);
 	/* Card Status is 0x900 - transfer mode, ready for data. */
 
 	p = buf;
-	for (i = 0; i < 512 / 4; ++i)
+	for (i = 0; i < SDHC_BLK_SIZE >> 2; ++i)
 		p[i] = readl(io_base + SDHC_DATA);
 }
 
@@ -446,7 +449,6 @@ static void sdhc_set_sdclock(uint32_t freq)
 	v |= bits_on(SDHC_C1_SDCLK_EN);
 	writel(v, io_base + SDHC_CNTRL1);
 }
-
 
 /* Turn OFF Interrupts, Clocks, and Power.
  * Reset all.
