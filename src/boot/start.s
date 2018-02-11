@@ -64,7 +64,7 @@ start:
 	bl	boot_map
 
 
-	/* DSB to ensure completion of stores to the tables. */
+	/* DSB to ensure completion of cache/tlb management. */
 	bl	_dsb
 
 	mrc	p15, 0, r0, c1, c0, 0		@ Control register
